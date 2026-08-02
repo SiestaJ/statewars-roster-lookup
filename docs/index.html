@@ -11,8 +11,8 @@
     <header class="hero">
       <div>
         <p class="eyebrow">State Wars Hockey</p>
-        <h1>Roster PDF Lookup</h1>
-        <p class="subhead">Pick a division and team. The roster comes live from HockeyShift/DigitalShift, then matches against the parsed PDF index.</p>
+        <h1>Roster RHA Lookup</h1>
+        <p class="subhead">Pick a division and team. The roster comes live from HockeyShift/DigitalShift, then matches against the current RHA PDF.</p>
       </div>
       <button id="refreshBtn" type="button">Refresh tournament</button>
     </header>
@@ -46,8 +46,8 @@
               <th>#</th>
               <th>Player</th>
               <th>Pos</th>
-              <th>PDF Match</th>
-              <th>PDF Details</th>
+              <th>RHA Match</th>
+              <th>RHA Details</th>
             </tr>
           </thead>
           <tbody id="resultsBody">
@@ -60,8 +60,7 @@
     <section class="card notes">
       <h2>Data sources</h2>
       <ul>
-        <li>Live roster/team data: <code>web.api.digitalshift.ca</code></li>
-        <li>PDF lookup: <code>docs/data/pdf_lookup.json</code></li>
+        <li>RHA lookup: <code>docs/data/pdf_lookup.json</code></li>
       </ul>
     </section>
   </main>
