@@ -284,9 +284,10 @@ function loadStatusOverrides() {
 
 function loadTournamentOpsCollapsed() {
   try {
-    return localStorage.getItem(TOURNAMENT_OPS_COLLAPSED_KEY) === '1';
+    const saved = localStorage.getItem(TOURNAMENT_OPS_COLLAPSED_KEY);
+    return saved === null ? true : saved === '1';
   } catch (err) {
-    return false;
+    return true;
   }
 }
 
@@ -891,8 +892,9 @@ function renderTournamentOps() {
   const bodyHidden = expanded ? '' : ' hidden';
   const pct = Number(summary.verifiedPct || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
   const actionsDisabled = ops.isScanning || !hasTotals;
+  const verifiedPctStyle = `--verified-pct: ${Math.max(0, Math.min(100, Number(summary.verifiedPct || 0)))}%`;
   const chip = (kind, label, value) => `<span class="ops-chip ${kind}"><b>${value}</b><i>${label}</i></span>`;
-  const card = (kind, label, value, hint) => `<button class="tournament-stat ${kind}" type="button" data-tournament-filter="${kind}" ${actionsDisabled ? 'disabled' : ''}><span>${label}</span><strong>${value}</strong><em>${hint}</em></button>`;
+  const card = (kind, label, value, hint) => `<button class="tournament-stat ${kind}" type="button" data-tournament-filter="${kind}" ${kind === 'verified' ? `style="${verifiedPctStyle}"` : ''} ${actionsDisabled ? 'disabled' : ''}><span>${label}</span><strong>${value}</strong><em>${hint}</em></button>`;
   els.tournamentOps.innerHTML = `
     <button class="tournament-ops-strip" type="button" data-tournament-collapse aria-expanded="${expanded}" aria-label="${expanded ? 'Hide' : 'Show'} tournament detail">
       <span class="strip-name">
