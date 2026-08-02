@@ -284,3 +284,15 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 9px 0; }
   height: 20px;
   accent-color: var(--green);
 }
+
+.link-choice-dialog {
+  width: min(420px, calc(100vw - 32px));
+  border: 0;
+  border-radius: 20px;
+  padding: 0;
+  box-shadow: var(--shadow);
+}
+.link-choice-dialog::backdrop { background: rgba(6, 31, 73, .36); }
+.link-choice-card { display: grid; gap: 16px; padding: 18px; }
+.link-choice-card h2 { margin: 0 0 4px; }
+.link-choice-actions { display: grid; gap: 10px; }

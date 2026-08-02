@@ -82,8 +82,22 @@
         </table>
       </div>
     </section>
+
+    <dialog id="linkChoiceDialog" class="link-choice-dialog" aria-labelledby="linkChoiceTitle">
+      <form method="dialog" class="link-choice-card">
+        <div>
+          <h2 id="linkChoiceTitle">Open player page?</h2>
+          <div id="linkChoiceMeta" class="meta"></div>
+        </div>
+        <div class="link-choice-actions">
+          <button id="linkDetailsBtn" class="button button-white" type="button">Details</button>
+          <button id="linkOpenBtn" class="button" type="button">Go to player page</button>
+          <button id="linkCancelBtn" class="button button-white" type="button">Cancel</button>
+        </div>
+      </form>
+    </dialog>
   </main>
 
-  <script src="./app.js?v=20260802h" type="module"></script>
+  <script src="./app.js?v=20260802i" type="module"></script>
 </body>
 </html>

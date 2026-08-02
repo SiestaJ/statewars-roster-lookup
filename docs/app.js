@@ -39,6 +39,12 @@ const els = {
   applyUrl: document.querySelector('#applyUrlBtn'),
   menuToggle: document.querySelector('#utilityMenuBtn'),
   menuPanel: document.querySelector('#utilityMenuPanel'),
+  linkDialog: document.querySelector('#linkChoiceDialog'),
+  linkDialogTitle: document.querySelector('#linkChoiceTitle'),
+  linkDialogMeta: document.querySelector('#linkChoiceMeta'),
+  linkDetails: document.querySelector('#linkDetailsBtn'),
+  linkOpen: document.querySelector('#linkOpenBtn'),
+  linkCancel: document.querySelector('#linkCancelBtn'),
   status: document.querySelector('#status'),
   counts: document.querySelector('#counts'),
   body: document.querySelector('#resultsBody'),
@@ -70,6 +76,31 @@ function setUtilityMenu(open) {
 
 function closeUtilityMenu() {
   setUtilityMenu(false);
+}
+
+function closeLinkDialog() {
+  if (!els.linkDialog?.open) return;
+  els.linkDialog.close();
+}
+
+function showLinkChoice({ title, meta, href, onDetails }) {
+  if (!els.linkDialog || !els.linkOpen || !els.linkDetails) {
+    onDetails?.();
+    return;
+  }
+  els.linkDialogTitle.textContent = title || 'Open player page?';
+  els.linkDialogMeta.textContent = meta || href;
+  els.linkDetails.onclick = () => {
+    closeLinkDialog();
+    onDetails?.();
+  };
+  els.linkOpen.onclick = () => {
+    closeLinkDialog();
+    const opened = window.open(href, '_blank', 'noopener');
+    if (!opened) window.location.href = href;
+  };
+  els.linkCancel.onclick = closeLinkDialog;
+  els.linkDialog.showModal();
 }
 
 function setStatus(message, isError = false) {
@@ -189,6 +220,35 @@ function normalizeName(name) {
 
 function compact(value) {
   return normalizeName(value).replace(/\s+/g, '');
+}
+
+function isNearFirstName(a, b) {
+  const left = compact(a);
+  const right = compact(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (Math.abs(left.length - right.length) > 1) return false;
+  if (left.length === right.length) {
+    let diffs = 0;
+    for (let i = 0; i < left.length; i += 1) {
+      if (left[i] !== right[i]) diffs += 1;
+      if (diffs > 2) return false;
+    }
+    if (diffs <= 1) return true;
+    for (let i = 0; i < left.length - 1; i += 1) {
+      if (left[i] !== right[i] && left[i] === right[i + 1] && left[i + 1] === right[i]) {
+        return left.slice(0, i) === right.slice(0, i) && left.slice(i + 2) === right.slice(i + 2);
+      }
+    }
+    return false;
+  }
+  const [shorter, longer] = left.length < right.length ? [left, right] : [right, left];
+  for (let i = 0, j = 0, skipped = 0; j < longer.length; j += 1) {
+    if (shorter[i] === longer[j]) i += 1;
+    else skipped += 1;
+    if (skipped > 1) return false;
+  }
+  return true;
 }
 
 function nameParts(name) {
@@ -383,9 +443,13 @@ async function loadPdfLookup() {
         last: row.last || nameParts(row.name).last,
       };
       const fullName = row.name || `${parts.first} ${parts.last}`.trim();
-      const exactKey = compact(fullName);
+      const exactKeys = new Set([
+        compact(fullName),
+        compact(`${parts.first || ''} ${parts.last || ''}`),
+        compact(`${parts.last || ''} ${parts.first || ''}`),
+      ].filter(Boolean));
       const lastKey = compact(parts.last);
-      if (exactKey) {
+      for (const exactKey of exactKeys) {
         const existing = state.pdfByName.get(exactKey) || [];
         existing.push({ ...row, name: fullName, first: parts.first, last: parts.last });
         state.pdfByName.set(exactKey, existing);
@@ -693,6 +757,21 @@ function getPdfMatch(player) {
     result = { status: 'matched', baseStatus: 'matched', label: 'Matched', matches: exact, confidence: 'exact first + last' };
   } else {
     const sameLast = state.pdfByLast.get(compact(parts.last)) || [];
+    const nearFirst = sameLast.filter(row => isNearFirstName(row.first, parts.first));
+    if (nearFirst.length === 1) {
+      result = { status: 'matched', baseStatus: 'matched', label: 'Matched', matches: nearFirst, confidence: 'same last + near first spelling' };
+      const saved = getSavedStatus(player);
+      if (saved === 'matched' || saved === 'missing') {
+        return {
+          ...result,
+          status: saved,
+          label: saved === 'matched' ? 'Matched' : 'Missing',
+          overridden: true,
+          overrideLabel: saved === 'matched' ? 'Confirmed on this phone' : 'Marked missing on this phone',
+        };
+      }
+      return result;
+    }
     const likely = sameLast.filter(row => compact(row.first).slice(0, 1) === compact(parts.first).slice(0, 1));
     if (likely.length) {
       result = { status: 'verify', baseStatus: 'verify', label: 'Verify', matches: likely, confidence: 'same last + same first initial' };
@@ -823,11 +902,11 @@ function renderResults() {
     tr.innerHTML = `
       <td class="num">${escapeHtml(player.number)}</td>
       <td>
-        <div class="player"><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(player.name)}</a></div>
+        <div class="player"><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener" data-player-page-link="true">${escapeHtml(player.name)}</a></div>
         <div class="meta links-line">
           <a href="${escapeHtml(divisionUrl())}" target="_blank" rel="noopener">Division</a>
           ${teamHref ? `<span>·</span><span>${escapeHtml(player.team || 'Team')}</span>` : `<span>· ${escapeHtml(player.team || '')}</span>`}
-          <span>·</span><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener">HockeyShift ID: ${escapeHtml(player.playerId)}</a>
+          <span>·</span><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener" data-player-page-link="true">HockeyShift ID: ${escapeHtml(player.playerId)}</a>
         </div>
       </td>
       <td class="rha-cell">${formatRhaIcon(match)}</td>`;
@@ -840,12 +919,27 @@ function renderResults() {
       ? `<label class="verify-control"><input type="checkbox"${verifiedChecked} data-verify-action="${isUserVerified(player) ? 'reset' : 'matched'}" data-player-id="${escapeHtml(player.playerId)}"> User verified this RHA match</label>`
       : '';
     detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.overrideLabel || match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}<div class="verify-actions">${verifyCheckbox}<button type="button" class="button tiny-button button-white" data-verify-action="missing" data-player-id="${escapeHtml(player.playerId)}">Mark missing</button>${match.overridden ? `<button type="button" class="button tiny-button button-white" data-verify-action="reset" data-player-id="${escapeHtml(player.playerId)}">Reset</button>` : ''}</div></div></td>`;
+    const setDetailsOpen = open => {
+      detail.hidden = !open;
+      tr.setAttribute('aria-expanded', String(open));
+    };
     const toggle = () => {
       const isOpen = !detail.hidden;
-      detail.hidden = isOpen;
-      tr.setAttribute('aria-expanded', String(!isOpen));
+      setDetailsOpen(!isOpen);
     };
     tr.addEventListener('click', event => {
+      const playerLink = event.target.closest('a[data-player-page-link]');
+      if (playerLink) {
+        event.preventDefault();
+        event.stopPropagation();
+        showLinkChoice({
+          title: player.name,
+          meta: `HockeyShift ID: ${player.playerId}`,
+          href: playerLink.href,
+          onDetails: () => setDetailsOpen(true),
+        });
+        return;
+      }
       if (event.target.closest('a, button, input, label')) return;
       toggle();
     });
