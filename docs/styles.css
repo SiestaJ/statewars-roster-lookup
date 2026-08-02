@@ -76,8 +76,9 @@ tbody tr:hover { background: #f8fbff; }
 .player { font-weight: 900; }
 .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .badge { display: inline-flex; border-radius: 999px; padding: 4px 9px; font-weight: 900; font-size: 12px; }
-.badge.hit { background: #e9f7ef; color: var(--green); }
-.badge.miss { background: #fff4e0; color: var(--amber); }
+.badge.hit, .badge.matched { background: #e9f7ef; color: var(--green); }
+.badge.review { background: #fff4e0; color: var(--amber); }
+.badge.miss, .badge.missing { background: #fdecec; color: var(--red); }
 .empty { text-align: center; color: var(--muted); padding: 32px; }
 .notes h2 { margin: 0 0 8px; }
 .notes ul { margin-bottom: 0; color: var(--muted); }

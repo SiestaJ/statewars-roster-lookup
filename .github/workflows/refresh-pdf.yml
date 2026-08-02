@@ -22,10 +22,8 @@ jobs:
         env:
           PDF_URL: ${{ vars.PDF_URL || secrets.PDF_URL }}
         run: |
-          if [ -z "$PDF_URL" ]; then
-            echo "PDF_URL repo variable/secret is not set; skipping refresh."
-            exit 0
-          fi
+          # If PDF_URL is unset, scripts/parse_pdf.py discovers the current
+          # "Click Here for Recent List" PDF from the RHA member-list page.
           python scripts/parse_pdf.py
       - name: Commit updated lookup JSON
         uses: stefanzweifel/git-auto-commit-action@v5
