@@ -129,10 +129,15 @@ function findMatchingEvent(tournament) {
   });
 }
 
-function tournamentLabel(tournament) {
+function tournamentShortLabel(tournament) {
+  return tournament?.short_name || tournament?.name || `Tournament ${tournament?.id || ''}`.trim();
+}
+
+function tournamentDetailLabel(tournament) {
+  const label = tournamentShortLabel(tournament);
   const event = findMatchingEvent(tournament);
   const eventText = eventDateLabel(event);
-  return eventText ? `${tournament.name} — ${eventText}` : tournament.name;
+  return eventText ? `${label} — ${eventText}` : label;
 }
 
 
@@ -362,7 +367,8 @@ function renderTournamentOptions() {
   for (const tournament of state.tournaments) {
     const opt = document.createElement('option');
     opt.value = tournament.id;
-    opt.textContent = tournamentLabel(tournament);
+    opt.textContent = tournamentShortLabel(tournament);
+    opt.title = tournamentDetailLabel(tournament);
     els.tournament.appendChild(opt);
   }
   els.tournament.value = String(CONFIG.tournamentId);
