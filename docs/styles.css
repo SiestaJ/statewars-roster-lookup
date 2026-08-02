@@ -26,11 +26,11 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.shell { max-width: 1180px; margin: 0 auto; padding: 28px 18px 48px; }
+.shell { max-width: 1180px; margin: 0 auto; padding: 14px 18px 48px; }
 
 .hero {
-  margin: -28px -18px 18px;
-  padding: 34px 18px 24px;
+  margin: -14px -18px 12px;
+  padding: 16px 18px 14px;
   background: linear-gradient(112deg, var(--navy) 0 69%, var(--red) 69% 100%);
 }
 
@@ -38,62 +38,28 @@ body {
   max-width: 1180px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 14px;
   align-items: center;
   background: rgba(255,255,255,.96);
   border: 1px solid rgba(255,255,255,.65);
-  border-radius: 22px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 16px 18px;
+  padding: 10px 14px;
 }
 
 .statewars-logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #f5f8ff, #ffffff);
-  display: grid;
-  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: #06101e;
   border: 1px solid #e5edf8;
-  position: relative;
-  overflow: hidden;
   box-shadow: inset 0 0 0 2px rgba(6,31,73,.04);
 }
 
-.statewars-logo::before {
-  content: "";
-  position: absolute;
-  width: 68px;
-  height: 22px;
-  background: var(--red);
-  transform: rotate(-18deg);
-  bottom: 13px;
-  left: 3px;
-  border-radius: 999px;
-}
-
-.statewars-logo::after {
-  content: "STATE\A WARS";
-  white-space: pre;
-  position: absolute;
-  top: 12px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 10px;
-  line-height: .95;
-  letter-spacing: .09em;
-  font-weight: 1000;
-  color: var(--navy);
-}
-
-.logo-mark { position: relative; z-index: 1; margin-top: 20px; font-size: 31px; filter: saturate(.85); }
-
-.eyebrow { margin: 0 0 5px; color: var(--blue); font-weight: 900; letter-spacing: .09em; text-transform: uppercase; font-size: 12px; }
-h1 { margin: 0; font-size: clamp(31px, 5vw, 54px); line-height: .96; letter-spacing: -.035em; color: #071c3f; }
-.subhead { margin: 10px 0 0; max-width: 760px; color: var(--muted); font-size: 16px; line-height: 1.45; }
-.pdf-meta { margin-top: 11px; color: #46576e; font-size: 13px; font-weight: 800; }
+h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); line-height: .96; letter-spacing: -.035em; color: #071c3f; }
+.pdf-meta { margin-top: 6px; color: #46576e; font-size: 12px; font-weight: 800; }
 .pdf-meta.error { color: var(--red); }
 
 .hero-actions { display: grid; gap: 10px; justify-items: stretch; min-width: 190px; }
@@ -109,11 +75,12 @@ h1 { margin: 0; font-size: clamp(31px, 5vw, 54px); line-height: .96; letter-spac
 
 .controls {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(220px, 1.4fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, .8fr) auto auto;
   gap: 14px;
   align-items: end;
 }
 
+.url-field { grid-column: 1 / -3; }
 label { display: grid; gap: 7px; color: var(--muted); font-weight: 800; font-size: 13px; }
 select, input, button, .button {
   min-height: 44px;
@@ -149,15 +116,17 @@ button:disabled { background: #8ca4c4; cursor: wait; box-shadow: none; }
 .status.error { color: var(--red); font-weight: 900; }
 .counts { font-weight: 900; }
 .table-wrap { overflow: auto; }
-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; min-width: 720px; }
+table { width: 100%; border-collapse: separate; border-spacing: 0 10px; table-layout: fixed; }
 th, td { text-align: left; padding: 12px 14px; vertical-align: top; }
 th { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding-top: 0; padding-bottom: 2px; }
-tbody tr { background: #fff; box-shadow: 0 6px 16px rgba(28,74,122,.06); }
+tbody tr.player-row { background: #fff; box-shadow: 0 6px 16px rgba(28,74,122,.06); cursor: pointer; }
 tbody td { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 tbody td:first-child { border-left: 1px solid var(--line); border-radius: 16px 0 0 16px; }
 tbody td:last-child { border-right: 1px solid var(--line); border-radius: 0 16px 16px 0; }
-tbody tr:hover { background: #f8fbff; }
-.num { font-weight: 900; color: var(--muted); width: 56px; }
+tbody tr.player-row:hover, tbody tr.player-row:focus { background: #f8fbff; outline: 2px solid rgba(11,94,185,.24); outline-offset: 2px; }
+th:first-child, .num { width: 64px; }
+.rha-col, .rha-cell { width: 76px; text-align: center; }
+.num { font-weight: 900; color: var(--muted); }
 .player { font-weight: 1000; }
 .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .badge { display: inline-flex; border-radius: 999px; padding: 5px 10px; font-weight: 1000; font-size: 12px; }
@@ -165,15 +134,47 @@ tbody tr:hover { background: #f8fbff; }
 .badge.review { background: #fff4e0; color: #b86c00; }
 .badge.miss, .badge.missing { background: #fdecec; color: var(--red); }
 .empty { text-align: center; color: var(--muted); padding: 32px; }
+.rha-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 1000;
+  line-height: 1;
+}
+.rha-yes { background: #e9f7ef; color: var(--green); }
+.rha-no { background: #fdecec; color: var(--red); }
+.detail-row td {
+  border: 0;
+  padding-top: 0;
+}
+.detail-panel {
+  margin: -4px 0 4px;
+  padding: 12px 14px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.8);
+}
 hr { border: 0; border-top: 1px solid var(--line); margin: 9px 0; }
 
 @media (max-width: 880px) {
-  .brand-card { grid-template-columns: 68px 1fr; }
-  .statewars-logo { width: 62px; height: 62px; border-radius: 16px; }
-  .statewars-logo::after { font-size: 9px; top: 10px; }
-  .statewars-logo::before { width: 58px; height: 18px; bottom: 11px; }
-  .logo-mark { font-size: 26px; margin-top: 18px; }
-  .hero-actions { grid-column: 1 / -1; grid-template-columns: 1fr; min-width: 0; }
+  .shell { padding: 8px 14px 40px; }
+  .hero { margin: -8px -14px 10px; padding: 10px 14px; }
+  .brand-card { grid-template-columns: 46px 1fr; gap: 10px; padding: 9px 12px; border-radius: 16px; }
+  .statewars-logo { width: 44px; height: 44px; border-radius: 12px; }
+  h1 { font-size: 30px; }
+  .pdf-meta { font-size: 11px; margin-top: 4px; }
+  .card { padding: 14px; border-radius: 16px; }
   .controls { grid-template-columns: 1fr; }
+  .url-field { grid-column: auto; }
   .status-row { display: grid; }
+  th, td { padding: 11px 10px; }
+  th:first-child, .num { width: 48px; }
+  .rha-col, .rha-cell { width: 54px; }
+  .player { font-size: 16px; line-height: 1.15; }
+  .rha-icon { width: 30px; height: 30px; font-size: 21px; }
 }

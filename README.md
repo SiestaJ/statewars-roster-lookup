@@ -5,9 +5,11 @@ Static GitHub Pages app for deterministic StateWars roster vs. RHA member-PDF lo
 ## What it does
 
 - Logs into the public DigitalShift/HockeyShift website API from the browser.
-- Loads the current State Wars team/division list from a seed team page.
-- Lets the user pick division + team from dropdowns.
-- Fetches that team's live roster.
+- Loads State Wars tournaments/divisions from deterministic HockeyShift/DigitalShift API filters.
+- Matches State Wars events from `https://www.statewarshockey.com/events` via the public Events API when names line up.
+- Lets the user pick tournament + division + team from dropdowns.
+- Accepts pasted State Wars/HockeyShift stats URLs, e.g. `/stats#/584/team/685597/roster` or `?tournament_id=3620`.
+- Fetches the selected team's live roster.
 - Matches roster names against `docs/data/pdf_lookup.json` generated from the current RHA member-list PDF.
 - Uses exact normalized first+last matching for `matched`.
 - Flags same-last + same-first-initial rows as `review` for nickname/legal-name drift.
@@ -19,6 +21,15 @@ The app defaults to Pennsylvania — 2026 | State Wars 22 | 2009 AAA/AA:
 
 ```text
 https://www.statewarshockey.com/stats#/584/team/685597/roster
+```
+
+## Tournament selection
+
+The default is still 2026 State Wars 22, but the app is no longer locked to one seeded team page. It loads tournament/division metadata through deterministic DigitalShift filters, annotates matching State Wars event dates when the Events API name matches, and can resolve a pasted stats URL such as:
+
+```text
+https://www.statewarshockey.com/stats#/584/team/685597/roster
+https://www.statewarshockey.com/stats#/584/schedule?tournament_id=3620
 ```
 
 ## Local test

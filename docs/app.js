@@ -2,13 +2,17 @@ const CONFIG = {
   apiBase: 'https://web.api.digitalshift.ca',
   clientServiceId: '96e8984e-8187-4798-a562-b3f08dbae794',
   leagueId: 584,
-  seedTeamId: 685597,
+  tournamentId: 3620,
+  teamId: null,
   pdfLookupPath: './data/pdf_lookup.json',
 };
 
 const state = {
   ticket: null,
+  tournaments: [],
+  events: [],
   teamsByDivision: [],
+  currentTournamentName: '',
   pdfRows: [],
   pdfByName: new Map(),
   pdfByLast: new Map(),
@@ -17,11 +21,14 @@ const state = {
 };
 
 const els = {
+  tournament: document.querySelector('#tournamentSelect'),
   division: document.querySelector('#divisionSelect'),
   team: document.querySelector('#teamSelect'),
+  tournamentUrl: document.querySelector('#tournamentUrlInput'),
   search: document.querySelector('#searchInput'),
   refresh: document.querySelector('#refreshBtn'),
   lookup: document.querySelector('#lookupBtn'),
+  applyUrl: document.querySelector('#applyUrlBtn'),
   status: document.querySelector('#status'),
   counts: document.querySelector('#counts'),
   body: document.querySelector('#resultsBody'),
@@ -31,6 +38,7 @@ const els = {
 function setBusy(isBusy) {
   els.refresh.disabled = isBusy;
   els.lookup.disabled = isBusy;
+  els.applyUrl.disabled = isBusy;
 }
 
 function setStatus(message, isError = false) {
@@ -54,6 +62,48 @@ function formatDate(value) {
     timeZone: 'America/New_York',
   }).format(date);
 }
+
+function formatUtcDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+function eventDateLabel(event) {
+  if (!event?.started_at) return '';
+  const start = formatUtcDate(event.started_at);
+  const end = formatUtcDate(event.ended_at);
+  const dates = end && end !== start ? `${start}–${end}` : start;
+  return [dates, event.venue?.name].filter(Boolean).join(' · ');
+}
+
+function normalizedTournamentName(value) {
+  return normalizeName(value).replace(/^20\d{2}\s+/, '').replace(/\s+/g, ' ').trim();
+}
+
+function findMatchingEvent(tournament) {
+  const tName = normalizedTournamentName(tournament?.name || tournament?.short_name || '');
+  const tCompact = compact(tName);
+  if (!tName) return null;
+  return state.events.find(event => {
+    const eName = normalizedTournamentName(event.name);
+    const eCompact = compact(eName);
+    return eName.includes(tName) || tName.includes(eName) || eCompact.includes(tCompact) || tCompact.includes(eCompact);
+  });
+}
+
+function tournamentLabel(tournament) {
+  const event = findMatchingEvent(tournament);
+  const eventText = eventDateLabel(event);
+  return eventText ? `${tournament.name} — ${eventText}` : tournament.name;
+}
+
 
 function renderPdfMeta() {
   if (!els.pdfMeta) return;
@@ -161,21 +211,53 @@ function parseTeamsByDivision(teamHtml) {
   return JSON.parse(extractJsonArray(decoded, jsonStart));
 }
 
-async function loadTournament() {
-  setBusy(true);
-  setStatus('Refreshing tournament/division/team list…');
+async function loadEvents() {
+  const now = new Date();
+  const startDate = `${now.getFullYear()}-01-01`;
   try {
-    const data = await api('/partials/stats/team', {
-      league_id: CONFIG.leagueId,
-      team_id: CONFIG.seedTeamId,
+    const data = await api('/events', {
+      order: 'started_at',
+      fieldset: 'public',
+      type: 'event',
+      limit: 50,
+      status: 'published',
+      start_date: startDate,
     });
-    state.teamsByDivision = parseTeamsByDivision(data.content);
+    state.events = data.events || [];
+  } catch (err) {
+    console.warn('Event lookup not loaded:', err);
+    state.events = [];
+  }
+}
+
+async function loadTournament(options = {}) {
+  const { keepTeam = false, preferredDivisionId = null, preferredTeamId = null } = options;
+  setBusy(true);
+  setStatus('Refreshing tournament/division list…');
+  try {
+    await loadEvents();
+    const data = await api('/partials/stats/filters', {
+      type: 'tournament',
+      id: CONFIG.tournamentId,
+      autoselect: false,
+    });
+    state.tournaments = data.tournament?.options || [];
+    const selectedTournament = state.tournaments.find(t => String(t.id) === String(CONFIG.tournamentId));
+    state.currentTournamentName = selectedTournament?.name || `Tournament ${CONFIG.tournamentId}`;
+    state.teamsByDivision = (data.division?.options || [])
+      .filter(division => String(division.tournament_id) === String(CONFIG.tournamentId))
+      .map(division => ({ ...division, teams: [] }));
+    renderTournamentOptions();
     renderDivisionOptions();
-    renderTeamOptions();
-    els.team.value = '';
+    els.division.value = preferredDivisionId ? String(preferredDivisionId) : '';
+    if (els.division.value) await loadTeamsForDivision(els.division.value);
+    else renderTeamOptions();
+    els.team.value = preferredTeamId ? String(preferredTeamId) : (keepTeam ? els.team.value : '');
     state.roster = [];
     renderResults();
-    setStatus(`Loaded ${state.teamsByDivision.length} divisions from State Wars. Choose a team, or search the RHA PDF by last name.`);
+    const event = findMatchingEvent(selectedTournament);
+    const source = event ? ` Matched event: ${event.name} (${eventDateLabel(event)}).` : '';
+    setStatus(`Loaded ${state.teamsByDivision.length} divisions for ${state.currentTournamentName}.${source} Choose a team, or search the RHA PDF by last name.`);
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
@@ -183,6 +265,7 @@ async function loadTournament() {
     setBusy(false);
   }
 }
+
 
 async function loadPdfLookup() {
   try {
@@ -223,6 +306,17 @@ async function loadPdfLookup() {
   }
 }
 
+function renderTournamentOptions() {
+  els.tournament.innerHTML = '';
+  for (const tournament of state.tournaments) {
+    const opt = document.createElement('option');
+    opt.value = tournament.id;
+    opt.textContent = tournamentLabel(tournament);
+    els.tournament.appendChild(opt);
+  }
+  els.tournament.value = String(CONFIG.tournamentId);
+}
+
 function renderDivisionOptions() {
   els.division.innerHTML = '';
   const blank = document.createElement('option');
@@ -232,7 +326,7 @@ function renderDivisionOptions() {
   for (const division of state.teamsByDivision) {
     const opt = document.createElement('option');
     opt.value = division.id;
-    opt.textContent = `${division.name} (${division.teams?.length || 0})`;
+    opt.textContent = `${division.name}${division.teams?.length ? ` (${division.teams.length})` : ''}`;
     els.division.appendChild(opt);
   }
 }
@@ -242,7 +336,7 @@ function renderTeamOptions() {
   els.team.innerHTML = '';
   const blank = document.createElement('option');
   blank.value = '';
-  blank.textContent = 'Select a team…';
+  blank.textContent = division ? 'Select a team…' : 'Select a division first…';
   els.team.appendChild(blank);
   for (const team of division?.teams || []) {
     const opt = document.createElement('option');
@@ -252,9 +346,76 @@ function renderTeamOptions() {
   }
 }
 
+async function loadTeamsForDivision(divisionId) {
+  const division = state.teamsByDivision.find(d => String(d.id) === String(divisionId));
+  if (!division) {
+    renderTeamOptions();
+    return;
+  }
+  if (division.teams?.length) {
+    renderTeamOptions();
+    return;
+  }
+  setStatus(`Loading teams for ${division.name}…`);
+  const data = await api('/partials/stats/filters', {
+    type: 'division',
+    id: division.id,
+    autoselect: false,
+  });
+  division.teams = (data.team?.options || []).filter(team => String(team.division_id) === String(division.id));
+  renderDivisionOptions();
+  els.division.value = String(division.id);
+  renderTeamOptions();
+}
+
+
 function parsePlayerId(href) {
   return href?.match(/player\/(\d+)/)?.[1] || '';
 }
+
+function parseTournamentUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  if (!value) throw new Error('Paste a HockeyShift/State Wars stats URL first.');
+  const url = new URL(value, 'https://www.statewarshockey.com');
+  if (!url.hash.includes('/')) throw new Error('Paste a stats URL with a # route, e.g. /stats#/584/team/685597.');
+  const [pathPart, queryPart = ''] = url.hash.slice(1).split('?');
+  const parts = pathPart.split('/').filter(Boolean);
+  const params = new URLSearchParams(queryPart);
+  const leagueId = Number(parts[0] || params.get('league_id'));
+  const page = parts[1] || '';
+  const id = Number(parts[2] || '');
+  const tournamentId = Number(params.get('tournament_id')) || null;
+  const divisionId = Number(params.get('division_id')) || (page === 'division' ? id : null);
+  const teamId = page === 'team' ? id : null;
+  if (!leagueId) throw new Error('Could not find a league ID in that stats URL.');
+  return { leagueId, tournamentId, divisionId, teamId };
+}
+
+async function applyTournamentUrl() {
+  setBusy(true);
+  try {
+    const parsed = parseTournamentUrl(els.tournamentUrl.value);
+    CONFIG.leagueId = parsed.leagueId;
+    if (parsed.tournamentId) CONFIG.tournamentId = parsed.tournamentId;
+    if (parsed.teamId) {
+      const data = await api('/partials/stats/filters', {
+        type: 'team',
+        id: parsed.teamId,
+        autoselect: false,
+      });
+      CONFIG.tournamentId = data.tournament?.selected_id || CONFIG.tournamentId;
+      parsed.divisionId = data.division?.selected_id || parsed.divisionId;
+    }
+    await loadTournament({ preferredDivisionId: parsed.divisionId, preferredTeamId: parsed.teamId });
+    if (parsed.teamId) await lookupRoster();
+  } catch (err) {
+    console.error(err);
+    setStatus(err.message, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
 
 function parseRoster(rosterHtml) {
   const doc = new DOMParser().parseFromString(rosterHtml, 'text/html');
@@ -314,7 +475,7 @@ async function lookupRoster() {
     state.roster = parseRoster(data.content);
     renderResults();
     const teamName = els.team.selectedOptions[0]?.textContent || `team ${teamId}`;
-    setStatus(`Loaded live roster for ${teamName}.`);
+    setStatus(`Loaded live roster for ${teamName} in ${state.currentTournamentName}.`);
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
@@ -355,18 +516,47 @@ function renderResults() {
   els.counts.textContent = `${rows.length} shown · ${matched} matched · ${review} review · ${missing} missing · ${pdfCount.toLocaleString()} PDF rows`;
   els.body.innerHTML = '';
   if (!rows.length) {
-    els.body.innerHTML = '<tr><td colspan="4" class="empty">No roster rows match the filter.</td></tr>';
+    els.body.innerHTML = '<tr><td colspan="3" class="empty">No roster rows match the filter.</td></tr>';
     return;
   }
-  for (const { player, match } of outcomes) {
+  outcomes.forEach(({ player, match }, index) => {
+    const detailId = `details-${escapeHtml(player.playerId || index)}`;
     const tr = document.createElement('tr');
+    tr.className = 'player-row';
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', 'false');
+    tr.setAttribute('aria-controls', detailId);
     tr.innerHTML = `
       <td class="num">${escapeHtml(player.number)}</td>
       <td><div class="player">${escapeHtml(player.name)}</div><div class="meta">HockeyShift ID: ${escapeHtml(player.playerId)}</div></td>
-      <td><span class="badge ${escapeHtml(match.status)}">${escapeHtml(match.label)}</span><div class="meta">${escapeHtml(match.confidence)}</div></td>
-      <td>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<span class="meta">—</span>'}</td>`;
+      <td class="rha-cell">${formatRhaIcon(match)}</td>`;
+    const detail = document.createElement('tr');
+    detail.id = detailId;
+    detail.className = 'detail-row';
+    detail.hidden = true;
+    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}</div></td>`;
+    const toggle = () => {
+      const isOpen = !detail.hidden;
+      detail.hidden = isOpen;
+      tr.setAttribute('aria-expanded', String(!isOpen));
+    };
+    tr.addEventListener('click', toggle);
+    tr.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggle();
+      }
+    });
     els.body.appendChild(tr);
-  }
+    els.body.appendChild(detail);
+  });
+}
+
+function formatRhaIcon(match) {
+  const isMatched = match.status === 'matched';
+  const symbol = isMatched ? '✓' : '×';
+  const label = isMatched ? 'RHA match' : `${match.label}: ${match.confidence}`;
+  return `<span class="rha-icon ${isMatched ? 'rha-yes' : 'rha-no'}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${symbol}</span>`;
 }
 
 function formatPdfMatch(match) {
@@ -380,7 +570,7 @@ function renderPdfNameLookup(query) {
   els.body.innerHTML = '';
   if (!query) {
     els.counts.textContent = `${pdfCount.toLocaleString()} PDF rows indexed`;
-    els.body.innerHTML = '<tr><td colspan="4" class="empty">No team selected. Choose a team, or search the RHA PDF by last name.</td></tr>';
+    els.body.innerHTML = '<tr><td colspan="3" class="empty">No team selected. Choose a team, or search the RHA PDF by last name.</td></tr>';
     return;
   }
   const qCompact = compact(query);
@@ -391,18 +581,40 @@ function renderPdfNameLookup(query) {
   }).slice(0, 100);
   els.counts.textContent = `${matches.length} PDF name matches · ${pdfCount.toLocaleString()} PDF rows indexed`;
   if (!matches.length) {
-    els.body.innerHTML = `<tr><td colspan="4" class="empty">No RHA PDF names match “${escapeHtml(query)}”.</td></tr>`;
+    els.body.innerHTML = `<tr><td colspan="3" class="empty">No RHA PDF names match “${escapeHtml(query)}”.</td></tr>`;
     return;
   }
-  for (const match of matches) {
+  matches.forEach((match, index) => {
+    const detailId = `pdf-details-${index}`;
     const tr = document.createElement('tr');
+    tr.className = 'player-row';
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', 'false');
+    tr.setAttribute('aria-controls', detailId);
     tr.innerHTML = `
       <td class="num">—</td>
       <td><div class="player">${escapeHtml(match.name || `${match.first || ''} ${match.last || ''}`)}</div><div class="meta">RHA PDF lookup</div></td>
-      <td><span class="badge matched">PDF row</span><div class="meta">name/last-name match</div></td>
-      <td>${formatPdfMatch(match)}</td>`;
+      <td class="rha-cell"><span class="rha-icon rha-yes" aria-label="PDF row" title="PDF row">✓</span></td>`;
+    const detail = document.createElement('tr');
+    detail.id = detailId;
+    detail.className = 'detail-row';
+    detail.hidden = true;
+    detail.innerHTML = `<td colspan="3"><div class="detail-panel">${formatPdfMatch(match)}</div></td>`;
+    const toggle = () => {
+      const isOpen = !detail.hidden;
+      detail.hidden = isOpen;
+      tr.setAttribute('aria-expanded', String(!isOpen));
+    };
+    tr.addEventListener('click', toggle);
+    tr.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggle();
+      }
+    });
     els.body.appendChild(tr);
-  }
+    els.body.appendChild(detail);
+  });
 }
 
 function escapeHtml(value) {
@@ -411,10 +623,13 @@ function escapeHtml(value) {
   }[ch]));
 }
 
-els.division.addEventListener('change', () => { renderTeamOptions(); lookupRoster(); });
+els.tournament.addEventListener('change', async () => { CONFIG.tournamentId = Number(els.tournament.value); await loadTournament(); });
+els.division.addEventListener('change', async () => { await loadTeamsForDivision(els.division.value); await lookupRoster(); });
 els.team.addEventListener('change', lookupRoster);
 els.lookup.addEventListener('click', lookupRoster);
-els.refresh.addEventListener('click', async () => { await loadTournament(); await lookupRoster(); });
+els.refresh.addEventListener('click', async () => { await loadTournament({ keepTeam: true }); await lookupRoster(); });
+els.applyUrl.addEventListener('click', applyTournamentUrl);
+els.tournamentUrl.addEventListener('keydown', event => { if (event.key === 'Enter') applyTournamentUrl(); });
 els.search.addEventListener('input', renderResults);
 
 await loadPdfLookup();

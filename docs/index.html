@@ -4,29 +4,26 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>State Wars Roster Lookup</title>
+  <link rel="icon" href="./assets/statewars-logo.jpg" />
   <link rel="stylesheet" href="./styles.css?v=20260802" />
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <div class="brand-card" aria-label="State Wars Roster RHA Lookup">
-        <div class="statewars-logo" aria-hidden="true">
-          <span class="logo-mark">🏒</span>
-        </div>
+      <div class="brand-card" aria-label="RHA Lookup">
+        <img class="statewars-logo" src="./assets/statewars-logo.jpg" alt="State Wars Hockey logo" />
         <div class="brand-copy">
-          <p class="eyebrow">State Wars Hockey</p>
-          <h1>Roster RHA Lookup</h1>
-          <p class="subhead">Pick a division and team. The roster comes live from HockeyShift/DigitalShift, then matches against the current RHA PDF.</p>
+          <h1>RHA Lookup</h1>
           <div id="pdfMeta" class="pdf-meta">Loading RHA PDF status…</div>
-        </div>
-        <div class="hero-actions">
-          <a class="button button-red" id="updateRhaBtn" href="https://github.com/SiestaJ/statewars-roster-lookup/actions/workflows/refresh-pdf.yml" target="_blank" rel="noopener">Update RHA list</a>
-          <button id="refreshBtn" class="button button-white" type="button">Refresh tournament</button>
         </div>
       </div>
     </header>
 
     <section class="card controls" aria-label="Lookup controls">
+      <label>
+        Tournament
+        <select id="tournamentSelect"></select>
+      </label>
       <label>
         Division
         <select id="divisionSelect"></select>
@@ -40,6 +37,13 @@
         <input id="searchInput" type="search" placeholder="Last Name" autocomplete="off" />
       </label>
       <button id="lookupBtn" class="button" type="button">Lookup roster</button>
+      <label class="url-field">
+        Custom tournament/team URL
+        <input id="tournamentUrlInput" type="url" placeholder="Paste /stats#/584/team/685597 or ?tournament_id=3620" autocomplete="off" />
+      </label>
+      <button id="applyUrlBtn" class="button button-white" type="button">Use URL</button>
+      <button id="refreshBtn" class="button button-white utility-button" type="button">Refresh</button>
+      <a class="button button-red utility-button" id="updateRhaBtn" href="https://github.com/SiestaJ/statewars-roster-lookup/actions/workflows/refresh-pdf.yml" target="_blank" rel="noopener">Update RHA</a>
     </section>
 
     <section class="status-row">
@@ -54,12 +58,11 @@
             <tr>
               <th>#</th>
               <th>Player</th>
-              <th>RHA Match</th>
-              <th>RHA Details</th>
+              <th class="rha-col">RHA</th>
             </tr>
           </thead>
           <tbody id="resultsBody">
-            <tr><td colspan="4" class="empty">Choose a team.</td></tr>
+            <tr><td colspan="3" class="empty">Choose a team.</td></tr>
           </tbody>
         </table>
       </div>
