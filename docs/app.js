@@ -8,6 +8,8 @@ const CONFIG = {
   pdfLookupPath: './data/pdf_lookup.json',
 };
 
+const OVERRIDE_STORAGE_KEY = 'statewars-rha-status-overrides-v1';
+
 const state = {
   ticket: null,
   seasons: [],
@@ -20,6 +22,8 @@ const state = {
   pdfByLast: new Map(),
   pdfMeta: null,
   roster: [],
+  activeStatusFilter: 'all',
+  statusOverrides: loadStatusOverrides(),
 };
 
 const els = {
@@ -36,13 +40,13 @@ const els = {
   counts: document.querySelector('#counts'),
   body: document.querySelector('#resultsBody'),
   pdfMeta: document.querySelector('#pdfMeta'),
+  opsOverview: document.querySelector('#opsOverview'),
+  export: document.querySelector('#exportBtn'),
 };
 
 const STATS_SITES = {
   'www.statewarshockey.com': '96e8984e-8187-4798-a562-b3f08dbae794',
   'statewarshockey.com': '96e8984e-8187-4798-a562-b3f08dbae794',
-  'www.torhs.com': 'a965fbb4-8bd6-49eb-8368-736692053dd1',
-  'torhs.com': 'a965fbb4-8bd6-49eb-8368-736692053dd1',
 };
 
 function setBusy(isBusy) {
@@ -63,7 +67,7 @@ function setStatus(message, isError = false) {
 function configureStatsSite(url) {
   const serviceId = STATS_SITES[url.hostname.toLowerCase()];
   if (!serviceId) {
-    throw new Error(`Unsupported stats site: ${url.hostname}. Paste a State Wars or TORHS DigitalShift stats URL.`);
+    throw new Error(`Unsupported stats site: ${url.hostname}. Paste a State Wars stats URL.`);
   }
   CONFIG.statsOrigin = url.origin;
   if (CONFIG.clientServiceId !== serviceId) {
@@ -182,6 +186,44 @@ function nameParts(name) {
   };
 }
 
+function loadStatusOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(OVERRIDE_STORAGE_KEY) || '{}');
+  } catch (err) {
+    console.warn('Could not read saved verification choices:', err);
+    return {};
+  }
+}
+
+function saveStatusOverrides() {
+  try {
+    localStorage.setItem(OVERRIDE_STORAGE_KEY, JSON.stringify(state.statusOverrides));
+  } catch (err) {
+    console.warn('Could not save verification choices:', err);
+  }
+}
+
+function overrideScopeKey() {
+  const pdfStamp = state.pdfMeta?.pdf_dated || state.pdfMeta?.source || 'pdf';
+  return [CONFIG.leagueId, CONFIG.tournamentId, els.division?.value || 'division', pdfStamp].join(':');
+}
+
+function playerOverrideKey(player) {
+  return `${overrideScopeKey()}:${player.playerId || compact(player.name)}`;
+}
+
+function getSavedStatus(player) {
+  return state.statusOverrides[playerOverrideKey(player)] || null;
+}
+
+function setSavedStatus(player, status) {
+  const key = playerOverrideKey(player);
+  if (status) state.statusOverrides[key] = status;
+  else delete state.statusOverrides[key];
+  saveStatusOverrides();
+  renderResults();
+}
+
 async function api(path, params = {}, { auth = true } = {}) {
   const url = new URL(path, CONFIG.apiBase);
   Object.entries(params).forEach(([key, value]) => {
@@ -273,7 +315,7 @@ async function loadEvents() {
 async function loadTournament(options = {}) {
   const { keepTeam = false, preferredDivisionId = null, preferredTeamId = null } = options;
   setBusy(true);
-  setStatus('Refreshing tournament/division list…');
+  setStatus('Reloading tournament/division list…');
   try {
     await loadEvents();
     const data = await api('/partials/stats/filters', {
@@ -301,7 +343,7 @@ async function loadTournament(options = {}) {
     renderResults();
     const event = findMatchingEvent(selectedTournament);
     const source = event ? ` Matched event: ${event.name} (${eventDateLabel(event)}).` : '';
-    setStatus(`Loaded ${state.teamsByDivision.length} divisions for ${state.currentTournamentName}.${source} Choose a division, then click Lookup Players. You can still search the RHA PDF by last name.`);
+    setStatus(`Loaded ${state.teamsByDivision.length} divisions for ${state.currentTournamentName}.${source} Choose a division, then load players. You can still search the RHA PDF by last name.`);
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
@@ -516,7 +558,7 @@ async function applyTournamentUrl() {
     }
     await loadTournament({ preferredDivisionId: parsed.divisionId, preferredTeamId: parsed.teamId });
     if (parsed.teamId || parsed.divisionId) {
-      setStatus('Division selected. Click Lookup Players to search every player in that division.');
+      setStatus('Division selected. Load players to see Missing / Verify / Matched status by team.');
     }
   } catch (err) {
     console.error(err);
@@ -572,11 +614,11 @@ async function lookupRoster() {
   if (!divisionId) {
     state.roster = [];
     renderResults();
-    setStatus('No division selected. Choose a division, then click Lookup Players. You can still search the RHA PDF by last name.');
+    setStatus('No division selected. Choose a division, then load players. You can still search the RHA PDF by last name.');
     return;
   }
   setBusy(true);
-  setStatus('Fetching division players…');
+  setStatus('Loading division players…');
   try {
     const data = await api('/partials/stats/leaders/table', {
       division_id: divisionId,
@@ -631,40 +673,119 @@ function parseDivisionPlayers(playersHtml) {
 function getPdfMatch(player) {
   const parts = nameParts(player.name);
   const exact = state.pdfByName.get(compact(player.name)) || [];
+  let result;
   if (exact.length) {
-    return { status: 'matched', label: 'Exact match', matches: exact, confidence: 'exact first + last' };
+    result = { status: 'matched', baseStatus: 'matched', label: 'Matched', matches: exact, confidence: 'exact first + last' };
+  } else {
+    const sameLast = state.pdfByLast.get(compact(parts.last)) || [];
+    const likely = sameLast.filter(row => compact(row.first).slice(0, 1) === compact(parts.first).slice(0, 1));
+    if (likely.length) {
+      result = { status: 'verify', baseStatus: 'verify', label: 'Verify', matches: likely, confidence: 'same last + same first initial' };
+    } else {
+      result = { status: 'missing', baseStatus: 'missing', label: 'Missing', matches: sameLast.slice(0, 10), confidence: sameLast.length ? 'same last only' : 'no first + last match' };
+    }
   }
-  const sameLast = state.pdfByLast.get(compact(parts.last)) || [];
-  const likely = sameLast.filter(row => compact(row.first).slice(0, 1) === compact(parts.first).slice(0, 1));
-  if (likely.length) {
-    return { status: 'review', label: 'Review', matches: likely, confidence: 'same last + same first initial' };
+  const saved = getSavedStatus(player);
+  if (saved === 'matched' || saved === 'missing') {
+    return {
+      ...result,
+      status: saved,
+      label: saved === 'matched' ? 'Matched' : 'Missing',
+      overridden: true,
+      overrideLabel: saved === 'matched' ? 'Confirmed on this phone' : 'Marked missing on this phone',
+    };
   }
-  return { status: 'missing', label: 'No match', matches: sameLast.slice(0, 10), confidence: sameLast.length ? 'same last only' : 'no first + last match' };
+  return result;
+}
+
+function divisionUrl(divisionId = els.division.value) {
+  return `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/division/${divisionId}?tournament_id=${CONFIG.tournamentId}`;
+}
+
+function teamUrl(teamId) {
+  return `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/team/${teamId}/roster?tournament_id=${CONFIG.tournamentId}`;
+}
+
+function statusLabel(status) {
+  return status === 'verify' ? 'Verify' : status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function summarizeOutcomes(outcomes) {
+  return {
+    total: outcomes.length,
+    matched: outcomes.filter(o => o.match.status === 'matched').length,
+    verify: outcomes.filter(o => o.match.status === 'verify').length,
+    missing: outcomes.filter(o => o.match.status === 'missing').length,
+  };
+}
+
+function renderOpsOverview(allOutcomes) {
+  if (!els.opsOverview) return;
+  if (!state.roster.length) {
+    els.opsOverview.hidden = true;
+    return;
+  }
+  const summary = summarizeOutcomes(allOutcomes);
+  const divisionName = els.division.selectedOptions[0]?.textContent || `Division ${els.division.value}`;
+  const teamMap = new Map();
+  for (const outcome of allOutcomes) {
+    const key = outcome.player.teamId || outcome.player.team || 'unknown';
+    if (!teamMap.has(key)) teamMap.set(key, { team: outcome.player.team || 'Unknown team', teamId: outcome.player.teamId, outcomes: [] });
+    teamMap.get(key).outcomes.push(outcome);
+  }
+  const filterChip = (status, label, count) => `<button class="status-chip ${state.activeStatusFilter === status ? 'active' : ''}" type="button" data-status-filter="${status}"><span>${label}</span><strong>${count}</strong></button>`;
+  const teamCards = [...teamMap.values()].sort((a, b) => a.team.localeCompare(b.team)).map(item => {
+    const s = summarizeOutcomes(item.outcomes);
+    const teamHref = item.teamId ? teamUrl(item.teamId) : '';
+    return `
+      <article class="team-card">
+        <div class="team-card-title">
+          <button class="link-button" type="button" data-team-filter="${escapeHtml(item.teamId || '')}">${escapeHtml(item.team)}</button>
+          ${teamHref ? `<a href="${escapeHtml(teamHref)}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(item.team)} team page">↗</a>` : ''}
+        </div>
+        <div class="mini-counts"><span class="matched">${s.matched} matched</span><span class="verify">${s.verify} verify</span><span class="missing">${s.missing} missing</span></div>
+      </article>`;
+  }).join('');
+  els.opsOverview.hidden = false;
+  els.opsOverview.innerHTML = `
+    <div class="ops-head">
+      <div>
+        <div class="eyebrow">Ops status overview</div>
+        <h2>${escapeHtml(divisionName)}</h2>
+        <a class="deep-link" href="${escapeHtml(divisionUrl())}" target="_blank" rel="noopener">Open division page ↗</a>
+      </div>
+      <div class="summary-pills" role="group" aria-label="Status filters">
+        ${filterChip('all', 'All', summary.total)}
+        ${filterChip('missing', 'Missing', summary.missing)}
+        ${filterChip('verify', 'Verify', summary.verify)}
+        ${filterChip('matched', 'Matched', summary.matched)}
+      </div>
+    </div>
+    <div class="team-grid">${teamCards}</div>`;
 }
 
 function renderResults() {
-  const query = normalizeName(els.search.value);
   if (!state.roster.length) {
-    renderPdfNameLookup(query);
+    if (els.export) els.export.hidden = true;
+    renderOpsOverview([]);
+    renderPdfNameLookup(normalizeName(els.search.value));
     return;
   }
-  const rows = state.roster.filter(p => {
-    if (!query) return true;
-    return normalizeName(`${p.number} ${p.name} ${p.team || ''}`).includes(query);
-  });
   const selectedTeam = els.team.value;
-  const visibleRows = selectedTeam
-    ? rows.filter(player => String(player.teamId || '') === String(selectedTeam))
-    : rows;
-  const outcomes = visibleRows.map(player => ({ player, match: getPdfMatch(player) }));
-  const matched = outcomes.filter(o => o.match.status === 'matched').length;
-  const review = outcomes.filter(o => o.match.status === 'review').length;
-  const missing = outcomes.filter(o => o.match.status === 'missing').length;
+  const query = normalizeName(els.search.value);
+  const allOutcomes = state.roster
+    .filter(player => !selectedTeam || String(player.teamId || '') === String(selectedTeam))
+    .filter(player => !query || normalizeName(`${player.number} ${player.name} ${player.team || ''}`).includes(query))
+    .map(player => ({ player, match: getPdfMatch(player) }));
+  const outcomes = allOutcomes.filter(({ match }) => state.activeStatusFilter === 'all' || match.status === state.activeStatusFilter);
+  const summary = summarizeOutcomes(allOutcomes);
   const pdfCount = state.pdfMeta?.count || state.pdfRows.length;
-  els.counts.textContent = `${visibleRows.length} shown · ${matched} matched · ${review} review · ${missing} missing · ${pdfCount.toLocaleString()} PDF rows`;
+  els.counts.textContent = `${outcomes.length} visible · ${summary.missing} missing · ${summary.verify} verify · ${summary.matched} matched · ${pdfCount.toLocaleString()} PDF rows`;
+  if (els.export) els.export.hidden = !allOutcomes.some(o => o.match.status === 'missing' || o.match.status === 'verify');
+  renderOpsOverview(allOutcomes);
   els.body.innerHTML = '';
-  if (!visibleRows.length) {
-    els.body.innerHTML = '<tr><td colspan="3" class="empty">No player rows match the filter.</td></tr>';
+  if (!outcomes.length) {
+    els.body.innerHTML = '<tr><td colspan="3" class="empty">No player rows match this filter.</td></tr>';
     return;
   }
   outcomes.forEach(({ player, match }, index) => {
@@ -674,21 +795,32 @@ function renderResults() {
     tr.tabIndex = 0;
     tr.setAttribute('aria-expanded', 'false');
     tr.setAttribute('aria-controls', detailId);
+    const teamHref = player.teamId ? teamUrl(player.teamId) : '';
     tr.innerHTML = `
       <td class="num">${escapeHtml(player.number)}</td>
-      <td><div class="player">${escapeHtml(player.name)}</div><div class="meta">${escapeHtml([player.team, player.position, player.points ? `${player.points} pts` : '', `HockeyShift ID: ${player.playerId}`].filter(Boolean).join(' · '))}</div></td>
+      <td>
+        <div class="player"><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(player.name)}</a></div>
+        <div class="meta links-line">
+          <a href="${escapeHtml(divisionUrl())}" target="_blank" rel="noopener">Division</a>
+          ${teamHref ? `<span>·</span><a href="${escapeHtml(teamHref)}" target="_blank" rel="noopener">${escapeHtml(player.team || 'Team')}</a>` : `<span>· ${escapeHtml(player.team || '')}</span>`}
+          <span>· HockeyShift ID: ${escapeHtml(player.playerId)}</span>
+        </div>
+      </td>
       <td class="rha-cell">${formatRhaIcon(match)}</td>`;
     const detail = document.createElement('tr');
     detail.id = detailId;
     detail.className = 'detail-row';
     detail.hidden = true;
-    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}</div></td>`;
+    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.overrideLabel || match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}<div class="verify-actions"><button type="button" class="button tiny-button" data-verify-action="matched" data-player-id="${escapeHtml(player.playerId)}">Confirm matched</button><button type="button" class="button tiny-button button-white" data-verify-action="missing" data-player-id="${escapeHtml(player.playerId)}">Mark missing</button>${match.overridden ? `<button type="button" class="button tiny-button button-white" data-verify-action="reset" data-player-id="${escapeHtml(player.playerId)}">Reset</button>` : ''}</div></div></td>`;
     const toggle = () => {
       const isOpen = !detail.hidden;
       detail.hidden = isOpen;
       tr.setAttribute('aria-expanded', String(!isOpen));
     };
-    tr.addEventListener('click', toggle);
+    tr.addEventListener('click', event => {
+      if (event.target.closest('a, button')) return;
+      toggle();
+    });
     tr.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
@@ -701,10 +833,13 @@ function renderResults() {
 }
 
 function formatRhaIcon(match) {
-  const isMatched = match.status === 'matched';
-  const symbol = isMatched ? '✓' : '×';
-  const label = isMatched ? 'RHA match' : `${match.label}: ${match.confidence}`;
-  return `<span class="rha-icon ${isMatched ? 'rha-yes' : 'rha-no'}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${symbol}</span>`;
+  const config = {
+    matched: ['✓', 'rha-yes'],
+    verify: ['?', 'rha-verify'],
+    missing: ['×', 'rha-no'],
+  }[match.status] || ['?', 'rha-verify'];
+  const label = match.overridden ? `${match.label}: ${match.overrideLabel}` : `${match.label}: ${match.confidence}`;
+  return `<span class="rha-icon ${config[1]}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${config[0]}</span>`;
 }
 
 function formatPdfMatch(match) {
@@ -718,7 +853,7 @@ function renderPdfNameLookup(query) {
   els.body.innerHTML = '';
   if (!query) {
     els.counts.textContent = `${pdfCount.toLocaleString()} PDF rows indexed`;
-    els.body.innerHTML = '<tr><td colspan="3" class="empty">Choose a division, then click Lookup Players. Or search the RHA PDF by last name.</td></tr>';
+    els.body.innerHTML = '<tr><td colspan="3" class="empty">Choose a division, then load players. Or search the RHA PDF by last name.</td></tr>';
     return;
   }
   const qCompact = compact(query);
@@ -765,6 +900,45 @@ function renderPdfNameLookup(query) {
   });
 }
 
+function findPlayerById(playerId) {
+  return state.roster.find(player => String(player.playerId) === String(playerId));
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function exportMissingVerify() {
+  const rows = state.roster
+    .map(player => ({ player, match: getPdfMatch(player) }))
+    .filter(({ match }) => match.status === 'missing' || match.status === 'verify');
+  if (!rows.length) return;
+  const header = ['Status', 'Player', 'Team', 'Division', 'HockeyShift ID', 'Player URL', 'Team URL', 'Division URL', 'RHA Candidates'];
+  const divisionName = els.division.selectedOptions[0]?.textContent || '';
+  const lines = [header.map(csvCell).join(',')];
+  for (const { player, match } of rows) {
+    lines.push([
+      statusLabel(match.status),
+      player.name,
+      player.team,
+      divisionName,
+      player.playerId,
+      player.sourceUrl,
+      player.teamId ? teamUrl(player.teamId) : '',
+      divisionUrl(),
+      match.matches.map(m => `${m.first || ''} ${m.last || ''} ${m.state || ''}`.trim()).join('; '),
+    ].map(csvCell).join(','));
+  }
+  const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${compact(state.currentTournamentName || 'statewars')}-${compact(divisionName || 'division')}-missing-verify.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -776,15 +950,39 @@ els.tournament.addEventListener('change', async () => { CONFIG.tournamentId = Nu
 els.division.addEventListener('change', async () => {
   await loadTeamsForDivision(els.division.value);
   state.roster = [];
+  state.activeStatusFilter = 'all';
   renderResults();
-  if (els.division.value) setStatus('Division selected. Click Lookup Players to search every player in that division.');
+  if (els.division.value) setStatus('Division selected. Load players to see Missing / Verify / Matched status by team.');
 });
-els.team.addEventListener('change', renderResults);
+els.team.addEventListener('change', () => { state.activeStatusFilter = 'all'; renderResults(); });
 els.lookup.addEventListener('click', lookupRoster);
 els.refresh.addEventListener('click', async () => { await loadTournament({ keepTeam: true }); });
 els.applyUrl.addEventListener('click', applyTournamentUrl);
 els.tournamentUrl.addEventListener('keydown', event => { if (event.key === 'Enter') applyTournamentUrl(); });
 els.search.addEventListener('input', renderResults);
+els.export.addEventListener('click', exportMissingVerify);
+document.addEventListener('click', event => {
+  const statusButton = event.target.closest('[data-status-filter]');
+  if (statusButton) {
+    state.activeStatusFilter = statusButton.dataset.statusFilter || 'all';
+    renderResults();
+    return;
+  }
+  const teamButton = event.target.closest('button[data-team-filter]');
+  if (teamButton) {
+    els.team.value = teamButton.dataset.teamFilter || '';
+    state.activeStatusFilter = 'all';
+    renderResults();
+    return;
+  }
+  const verifyButton = event.target.closest('[data-verify-action]');
+  if (verifyButton) {
+    const player = findPlayerById(verifyButton.dataset.playerId);
+    if (!player) return;
+    const action = verifyButton.dataset.verifyAction;
+    setSavedStatus(player, action === 'reset' ? null : action);
+  }
+});
 
 await loadPdfLookup();
 els.search.value = '';

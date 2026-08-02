@@ -8,11 +8,15 @@ Static GitHub Pages app for deterministic StateWars roster vs. RHA member-PDF lo
 - Loads State Wars tournaments/divisions from deterministic HockeyShift/DigitalShift API filters.
 - Matches State Wars events from `https://www.statewarshockey.com/events` via the public Events API when names line up.
 - Lets the user pick tournament + division + team from dropdowns.
+- Loads all players for the selected division and shows an ops summary by status and team.
+- Allows phone-local verification overrides via browser storage: mark a verify row as matched or missing.
+- Exports Missing/Verify rows to CSV for tournament ops follow-up.
+- Links player, division, and team rows to State Wars stats pages in a new tab.
 - Accepts pasted State Wars/HockeyShift stats URLs, e.g. `/stats#/584/team/685597/roster` or `?tournament_id=3620`.
-- Fetches the selected team's live roster.
+- Fetches live division player data.
 - Matches roster names against `docs/data/pdf_lookup.json` generated from the current RHA member-list PDF.
 - Uses exact normalized first+last matching for `matched`.
-- Flags same-last + same-first-initial rows as `review` for nickname/legal-name drift.
+- Flags same-last + same-first-initial rows as `verify` for nickname/legal-name drift.
 - Uses no AI/fuzzy model in the browser.
 
 ## Default demo

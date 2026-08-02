@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>State Wars Roster Lookup</title>
   <link rel="icon" href="./assets/statewars-logo.jpg" />
-  <link rel="stylesheet" href="./styles.css?v=20260802f" />
+  <link rel="stylesheet" href="./styles.css?v=20260802g" />
 </head>
 <body>
   <main class="shell">
@@ -40,19 +40,25 @@
         <span class="sr-only">Last Name</span>
         <input id="searchInput" type="search" placeholder="Last Name" aria-label="Last Name" autocomplete="off" />
       </label>
-      <button id="lookupBtn" class="button" type="button">Lookup Players</button>
+      <button id="lookupBtn" class="button" type="button">Load Players</button>
       <label class="url-field">
         <span class="sr-only">Custom tournament/team URL</span>
-        <input id="tournamentUrlInput" type="url" placeholder="Paste any DigitalShift stats URL" aria-label="Custom tournament/team URL" autocomplete="off" />
+        <input id="tournamentUrlInput" type="url" placeholder="Paste State Wars stats URL" aria-label="Custom tournament/team URL" autocomplete="off" />
       </label>
       <button id="applyUrlBtn" class="button button-white" type="button">Use URL</button>
-      <button id="refreshBtn" class="button button-white utility-button" type="button">Refresh</button>
+      <button id="refreshBtn" class="button button-white utility-button" type="button">Reload Divisions</button>
       <a class="button button-red utility-button" id="updateRhaBtn" href="https://www.rollerhockeyalliance.com/player-member-list" target="_blank" rel="noopener">RHA Source</a>
     </section>
 
     <section class="status-row">
       <div id="status" class="status">Loading…</div>
       <div id="counts" class="counts"></div>
+    </section>
+
+    <section id="opsOverview" class="card ops-overview" aria-label="Ops status overview" hidden></section>
+
+    <section class="results-actions" aria-label="Result actions">
+      <button id="exportBtn" class="button button-white" type="button" hidden>Export Missing / Verify CSV</button>
     </section>
 
     <section class="card results-card">
@@ -66,13 +72,13 @@
             </tr>
           </thead>
           <tbody id="resultsBody">
-            <tr><td colspan="3" class="empty">Choose a division, then click Lookup Players.</td></tr>
+            <tr><td colspan="3" class="empty">Choose a division, then load players.</td></tr>
           </tbody>
         </table>
       </div>
     </section>
   </main>
 
-  <script src="./app.js?v=20260802f" type="module"></script>
+  <script src="./app.js?v=20260802g" type="module"></script>
 </body>
 </html>
