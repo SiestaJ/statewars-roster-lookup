@@ -35,6 +35,7 @@ const els = {
   search: document.querySelector('#searchInput'),
   refresh: document.querySelector('#refreshBtn'),
   lookup: document.querySelector('#lookupBtn'),
+  export: document.querySelector('#exportBtn'),
   applyUrl: document.querySelector('#applyUrlBtn'),
   menuToggle: document.querySelector('#utilityMenuBtn'),
   menuPanel: document.querySelector('#utilityMenuPanel'),
@@ -43,7 +44,6 @@ const els = {
   body: document.querySelector('#resultsBody'),
   pdfMeta: document.querySelector('#pdfMeta'),
   opsOverview: document.querySelector('#opsOverview'),
-  export: document.querySelector('#exportBtn'),
 };
 
 const STATS_SITES = {
@@ -601,7 +601,7 @@ function parseRoster(rosterHtml) {
       name,
       position: metaMatch?.[2] || '',
       playerId,
-      sourceUrl: `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
+      sourceUrl: playerStatsUrl(playerId),
     });
     seen.add(playerId);
   }
@@ -617,7 +617,7 @@ function parseRoster(rosterHtml) {
       name: cells[1],
       position: cells[2],
       playerId,
-      sourceUrl: `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
+      sourceUrl: playerStatsUrl(playerId),
     });
     seen.add(playerId);
   }
@@ -678,7 +678,7 @@ function parseDivisionPlayers(playersHtml) {
       points: cells[8]?.textContent?.trim() || '',
       pim: cells[10]?.textContent?.trim() || '',
       playerId,
-      sourceUrl: `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
+      sourceUrl: playerStatsUrl(playerId),
     });
     seen.add(playerId);
   }
@@ -779,6 +779,14 @@ function renderOpsOverview(allOutcomes) {
     <div class="team-grid">${teamCards}</div>`;
 }
 
+function playerStatsUrl(playerId) {
+  return `${CONFIG.statsOrigin}/stats#/player/${encodeURIComponent(playerId)}/stats`;
+}
+
+function isUserVerified(player) {
+  return getSavedStatus(player) === 'matched';
+}
+
 function renderResults() {
   if (!state.roster.length) {
     if (els.export) els.export.hidden = true;
@@ -794,9 +802,10 @@ function renderResults() {
     .map(player => ({ player, match: getPdfMatch(player) }));
   const outcomes = allOutcomes.filter(({ match }) => state.activeStatusFilter === 'all' || match.status === state.activeStatusFilter);
   const summary = summarizeOutcomes(allOutcomes);
+  const verified = allOutcomes.filter(o => isUserVerified(o.player)).length;
   const pdfCount = state.pdfMeta?.count || state.pdfRows.length;
-  els.counts.textContent = `${outcomes.length} visible · ${summary.missing} missing · ${summary.verify} verify · ${summary.matched} matched · ${pdfCount.toLocaleString()} PDF rows`;
-  if (els.export) els.export.hidden = !allOutcomes.some(o => o.match.status === 'missing' || o.match.status === 'verify');
+  els.counts.textContent = `${outcomes.length} visible · ${summary.missing} missing · ${summary.verify} verify · ${summary.matched} matched · ${verified} verified · ${pdfCount.toLocaleString()} PDF rows`;
+  if (els.export) els.export.hidden = !state.roster.length;
   renderOpsOverview(allOutcomes);
   els.body.innerHTML = '';
   if (!outcomes.length) {
@@ -817,8 +826,8 @@ function renderResults() {
         <div class="player"><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(player.name)}</a></div>
         <div class="meta links-line">
           <a href="${escapeHtml(divisionUrl())}" target="_blank" rel="noopener">Division</a>
-          ${teamHref ? `<span>·</span><a href="${escapeHtml(teamHref)}" target="_blank" rel="noopener">${escapeHtml(player.team || 'Team')}</a>` : `<span>· ${escapeHtml(player.team || '')}</span>`}
-          <span>· HockeyShift ID: ${escapeHtml(player.playerId)}</span>
+          ${teamHref ? `<span>·</span><span>${escapeHtml(player.team || 'Team')}</span>` : `<span>· ${escapeHtml(player.team || '')}</span>`}
+          <span>·</span><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener">HockeyShift ID: ${escapeHtml(player.playerId)}</a>
         </div>
       </td>
       <td class="rha-cell">${formatRhaIcon(match)}</td>`;
@@ -826,14 +835,18 @@ function renderResults() {
     detail.id = detailId;
     detail.className = 'detail-row';
     detail.hidden = true;
-    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.overrideLabel || match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}<div class="verify-actions"><button type="button" class="button tiny-button" data-verify-action="matched" data-player-id="${escapeHtml(player.playerId)}">Confirm matched</button><button type="button" class="button tiny-button button-white" data-verify-action="missing" data-player-id="${escapeHtml(player.playerId)}">Mark missing</button>${match.overridden ? `<button type="button" class="button tiny-button button-white" data-verify-action="reset" data-player-id="${escapeHtml(player.playerId)}">Reset</button>` : ''}</div></div></td>`;
+    const verifiedChecked = isUserVerified(player) ? ' checked' : '';
+    const verifyCheckbox = match.baseStatus === 'verify'
+      ? `<label class="verify-control"><input type="checkbox"${verifiedChecked} data-verify-action="${isUserVerified(player) ? 'reset' : 'matched'}" data-player-id="${escapeHtml(player.playerId)}"> User verified this RHA match</label>`
+      : '';
+    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.overrideLabel || match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}<div class="verify-actions">${verifyCheckbox}<button type="button" class="button tiny-button button-white" data-verify-action="missing" data-player-id="${escapeHtml(player.playerId)}">Mark missing</button>${match.overridden ? `<button type="button" class="button tiny-button button-white" data-verify-action="reset" data-player-id="${escapeHtml(player.playerId)}">Reset</button>` : ''}</div></div></td>`;
     const toggle = () => {
       const isOpen = !detail.hidden;
       detail.hidden = isOpen;
       tr.setAttribute('aria-expanded', String(!isOpen));
     };
     tr.addEventListener('click', event => {
-      if (event.target.closest('a, button')) return;
+      if (event.target.closest('a, button, input, label')) return;
       toggle();
     });
     tr.addEventListener('keydown', event => {
@@ -924,11 +937,14 @@ function csvCell(value) {
 }
 
 function exportMissingVerify() {
+  const selectedTeam = els.team.value;
+  const query = normalizeName(els.search.value);
   const rows = state.roster
-    .map(player => ({ player, match: getPdfMatch(player) }))
-    .filter(({ match }) => match.status === 'missing' || match.status === 'verify');
+    .filter(player => !selectedTeam || String(player.teamId || '') === String(selectedTeam))
+    .filter(player => !query || normalizeName(`${player.number} ${player.name} ${player.team || ''}`).includes(query))
+    .map(player => ({ player, match: getPdfMatch(player) }));
   if (!rows.length) return;
-  const header = ['Status', 'Player', 'Team', 'Division', 'HockeyShift ID', 'Player URL', 'Team URL', 'Division URL', 'RHA Candidates'];
+  const header = ['Status', 'Player', 'Team', 'Division', 'HockeyShift ID', 'Player URL', 'Team URL', 'Division URL', 'User Verified', 'RHA Candidates'];
   const divisionName = els.division.selectedOptions[0]?.textContent || '';
   const lines = [header.map(csvCell).join(',')];
   for (const { player, match } of rows) {
@@ -941,17 +957,19 @@ function exportMissingVerify() {
       player.sourceUrl,
       player.teamId ? teamUrl(player.teamId) : '',
       divisionUrl(),
+      isUserVerified(player) ? 'yes' : 'no',
       match.matches.map(m => `${m.first || ''} ${m.last || ''} ${m.state || ''}`.trim()).join('; '),
     ].map(csvCell).join(','));
   }
   const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${compact(state.currentTournamentName || 'statewars')}-${compact(divisionName || 'division')}-missing-verify.csv`;
+  a.download = `${compact(state.currentTournamentName || 'statewars')}-${compact(divisionName || 'division')}-rha-export.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(a.href);
+  setStatus(`Exported ${rows.length} rows. User-verified matches are included.`);
 }
 
 function escapeHtml(value) {

@@ -260,3 +260,27 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 9px 0; }
   .player { font-size: 16px; line-height: 1.15; }
   .rha-icon { width: 30px; height: 30px; font-size: 21px; }
 }
+
+.player-link, .meta-link {
+  color: var(--blue);
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.player-link:hover, .meta-link:hover { color: var(--blue-2); }
+.verify-control {
+  display: inline-flex;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.verify-control input {
+  width: 20px;
+  min-height: 20px;
+  height: 20px;
+  accent-color: var(--green);
+}
