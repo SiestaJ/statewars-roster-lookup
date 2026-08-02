@@ -36,6 +36,8 @@ const els = {
   refresh: document.querySelector('#refreshBtn'),
   lookup: document.querySelector('#lookupBtn'),
   applyUrl: document.querySelector('#applyUrlBtn'),
+  menuToggle: document.querySelector('#utilityMenuBtn'),
+  menuPanel: document.querySelector('#utilityMenuPanel'),
   status: document.querySelector('#status'),
   counts: document.querySelector('#counts'),
   body: document.querySelector('#resultsBody'),
@@ -57,6 +59,17 @@ function setBusy(isBusy) {
   els.refresh.disabled = isBusy;
   els.lookup.disabled = isBusy;
   els.applyUrl.disabled = isBusy;
+  if (els.menuToggle) els.menuToggle.disabled = isBusy;
+}
+
+function setUtilityMenu(open) {
+  if (!els.menuToggle || !els.menuPanel) return;
+  els.menuPanel.hidden = !open;
+  els.menuToggle.setAttribute('aria-expanded', String(open));
+}
+
+function closeUtilityMenu() {
+  setUtilityMenu(false);
 }
 
 function setStatus(message, isError = false) {
@@ -344,6 +357,7 @@ async function loadTournament(options = {}) {
     const event = findMatchingEvent(selectedTournament);
     const source = event ? ` Matched event: ${event.name} (${eventDateLabel(event)}).` : '';
     setStatus(`Loaded ${state.teamsByDivision.length} divisions for ${state.currentTournamentName}.${source} Choose a division, then load players. You can still search the RHA PDF by last name.`);
+    closeUtilityMenu();
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
@@ -560,6 +574,7 @@ async function applyTournamentUrl() {
     if (parsed.teamId || parsed.divisionId) {
       setStatus('Division selected. Load players to see Missing / Verify / Matched status by team.');
     }
+    closeUtilityMenu();
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
@@ -835,9 +850,9 @@ function renderResults() {
 function formatRhaIcon(match) {
   const config = {
     matched: ['✓', 'rha-yes'],
-    verify: ['?', 'rha-verify'],
+    verify: ['▲', 'rha-verify'],
     missing: ['×', 'rha-no'],
-  }[match.status] || ['?', 'rha-verify'];
+  }[match.status] || ['▲', 'rha-verify'];
   const label = match.overridden ? `${match.label}: ${match.overrideLabel}` : `${match.label}: ${match.confidence}`;
   return `<span class="rha-icon ${config[1]}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${config[0]}</span>`;
 }
@@ -957,11 +972,17 @@ els.division.addEventListener('change', async () => {
 els.team.addEventListener('change', () => { state.activeStatusFilter = 'all'; renderResults(); });
 els.lookup.addEventListener('click', lookupRoster);
 els.refresh.addEventListener('click', async () => { await loadTournament({ keepTeam: true }); });
+els.menuToggle.addEventListener('click', event => {
+  event.stopPropagation();
+  setUtilityMenu(els.menuPanel.hidden);
+});
 els.applyUrl.addEventListener('click', applyTournamentUrl);
 els.tournamentUrl.addEventListener('keydown', event => { if (event.key === 'Enter') applyTournamentUrl(); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeUtilityMenu(); });
 els.search.addEventListener('input', renderResults);
 els.export.addEventListener('click', exportMissingVerify);
 document.addEventListener('click', event => {
+  if (els.menuPanel && !els.menuPanel.hidden && !event.target.closest('.utility-menu')) closeUtilityMenu();
   const statusButton = event.target.closest('[data-status-filter]');
   if (statusButton) {
     state.activeStatusFilter = statusButton.dataset.statusFilter || 'all';

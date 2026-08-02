@@ -165,7 +165,6 @@ def main() -> int:
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "meta": {
-            "source": pdf_url,
             "rha_page_url": RHA_PAGE_URL,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "pdf_dated": pdf_dated,

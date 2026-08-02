@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>State Wars Roster Lookup</title>
   <link rel="icon" href="./assets/statewars-logo.jpg" />
-  <link rel="stylesheet" href="./styles.css?v=20260802g" />
+  <link rel="stylesheet" href="./styles.css?v=20260802h" />
 </head>
 <body>
   <main class="shell">
@@ -43,11 +43,16 @@
       <button id="lookupBtn" class="button" type="button">Load Players</button>
       <label class="url-field">
         <span class="sr-only">Custom tournament/team URL</span>
-        <input id="tournamentUrlInput" type="url" placeholder="Paste State Wars stats URL" aria-label="Custom tournament/team URL" autocomplete="off" />
+        <input id="tournamentUrlInput" type="url" placeholder="Paste tournament URL" aria-label="Custom tournament/team URL" autocomplete="off" />
       </label>
-      <button id="applyUrlBtn" class="button button-white" type="button">Use URL</button>
-      <button id="refreshBtn" class="button button-white utility-button" type="button">Reload Divisions</button>
-      <a class="button button-red utility-button" id="updateRhaBtn" href="https://www.rollerhockeyalliance.com/player-member-list" target="_blank" rel="noopener">RHA Source</a>
+      <div class="utility-menu">
+        <button id="utilityMenuBtn" class="button button-white menu-toggle" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="utilityMenuPanel" aria-label="Open utility menu">☰</button>
+        <div id="utilityMenuPanel" class="utility-menu-panel" role="menu" hidden>
+          <button id="applyUrlBtn" class="button button-white" type="button" role="menuitem">Use URL</button>
+          <button id="refreshBtn" class="button button-white utility-button" type="button" role="menuitem">Reload Divisions</button>
+          <a class="button button-red utility-button" id="updateRhaBtn" href="https://www.rollerhockeyalliance.com/player-member-list" target="_blank" rel="noopener" role="menuitem">RHA Source</a>
+        </div>
+      </div>
     </section>
 
     <section class="status-row">
@@ -79,6 +84,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260802g" type="module"></script>
+  <script src="./app.js?v=20260802h" type="module"></script>
 </body>
 </html>

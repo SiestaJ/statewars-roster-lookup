@@ -14,7 +14,7 @@ Static GitHub Pages app for deterministic StateWars roster vs. RHA member-PDF lo
 - Links player, division, and team rows to State Wars stats pages in a new tab.
 - Accepts pasted State Wars/HockeyShift stats URLs, e.g. `/stats#/584/team/685597/roster` or `?tournament_id=3620`.
 - Fetches live division player data.
-- Matches roster names against `docs/data/pdf_lookup.json` generated from the current RHA member-list PDF.
+- Matches roster names against `docs/data/pdf_lookup.json` generated at deploy time from the current RHA member-list PDF.
 - Uses exact normalized first+last matching for `matched`.
 - Flags same-last + same-first-initial rows as `verify` for nickname/legal-name drift.
 - Uses no AI/fuzzy model in the browser.
@@ -71,7 +71,7 @@ RHA_PAGE_URL="https://www.rollerhockeyalliance.com/player-member-list" python sc
 OUTPUT_PATH="docs/data/pdf_lookup.json" python scripts/parse_pdf.py
 ```
 
-The GitHub Actions workflow runs daily and commits the refreshed `docs/data/pdf_lookup.json`.
+The GitHub Actions workflow runs daily and on demand, generates `docs/data/pdf_lookup.json` only inside the Pages deploy artifact, and does not commit the member-list JSON to git.
 
 ## Notes
 
