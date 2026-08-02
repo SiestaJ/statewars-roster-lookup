@@ -886,11 +886,12 @@ function renderTournamentOps() {
   const ops = state.tournamentOps;
   const summary = ops.summary || {};
   const progress = ops.totalDivisions ? `${ops.progress}/${ops.totalDivisions} divisions` : 'Waiting for divisions';
-  const scanText = ops.isScanning ? `Scanning ${progress}…` : (ops.error || (summary.total ? `Scanned ${progress}` : 'Loading tournament totals…'));
+  const hasTotals = summary.total > 0;
+  const scanText = ops.isScanning ? `Scanning ${progress}…` : (ops.error || (hasTotals ? `Scanned ${progress}` : 'Tournament totals load on request.'));
   const bodyHidden = ops.collapsed ? ' hidden' : '';
   const collapsedLabel = ops.collapsed ? 'Expand' : 'Roll up';
   const pct = Number(summary.verifiedPct || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
-  const actionsDisabled = ops.isScanning || !summary.total;
+  const actionsDisabled = ops.isScanning || !hasTotals;
   const card = (kind, label, value, hint) => `<button class="tournament-stat ${kind}" type="button" data-tournament-filter="${kind}" ${actionsDisabled ? 'disabled' : ''}><span>${label}</span><strong>${value}</strong><em>${hint}</em></button>`;
   els.tournamentOps.innerHTML = `
     <div class="tournament-ops-head">
@@ -910,7 +911,7 @@ function renderTournamentOps() {
         ${card('verified', 'Verified %', `${pct}%`, 'RHA verified / total')}
       </div>
       <div class="tournament-actions">
-        <button class="button tiny-button" type="button" data-tournament-rescan ${ops.isScanning ? 'disabled' : ''}>Rescan tournament</button>
+        <button class="button tiny-button" type="button" data-tournament-rescan ${ops.isScanning ? 'disabled' : ''}>${hasTotals ? 'Rescan tournament' : 'Load tournament totals'}</button>
         <button class="button button-white tiny-button" type="button" data-tournament-export="missing" ${summary.missing && !ops.isScanning ? '' : 'disabled'}>Export missing CSV</button>
       </div>
     </div>`;
