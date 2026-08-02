@@ -3,7 +3,7 @@ const CONFIG = {
   clientServiceId: '96e8984e-8187-4798-a562-b3f08dbae794',
   leagueId: 584,
   seedTeamId: 685594,
-  pdfLookupPath: './data/pdf_lookup.json',
+  pdfLookupPath: 'https://digitalshift-assets.sfo2.cdn.digitaloceanspaces.com/pw/8c33cce3-36e5-4b96-a105-0a2c33d3e36d/f-b3ac4698-d3f6-407b-bd95-10eb3f56fe48/RHA%2071626UPD.pdf',
 };
 
 const state = {
