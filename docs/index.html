@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>State Wars Roster Lookup</title>
   <link rel="icon" href="./assets/statewars-logo.jpg" />
-  <link rel="stylesheet" href="./styles.css?v=20260802" />
+  <link rel="stylesheet" href="./styles.css?v=20260802b" />
 </head>
 <body>
   <main class="shell">
@@ -20,6 +20,10 @@
     </header>
 
     <section class="card controls" aria-label="Lookup controls">
+      <label>
+        Year
+        <select id="seasonSelect"></select>
+      </label>
       <label>
         Tournament
         <select id="tournamentSelect"></select>
@@ -39,11 +43,11 @@
       <button id="lookupBtn" class="button" type="button">Lookup roster</button>
       <label class="url-field">
         Custom tournament/team URL
-        <input id="tournamentUrlInput" type="url" placeholder="Paste /stats#/584/team/685597 or ?tournament_id=3620" autocomplete="off" />
+        <input id="tournamentUrlInput" type="url" placeholder="Paste any DigitalShift stats URL" autocomplete="off" />
       </label>
       <button id="applyUrlBtn" class="button button-white" type="button">Use URL</button>
       <button id="refreshBtn" class="button button-white utility-button" type="button">Refresh</button>
-      <a class="button button-red utility-button" id="updateRhaBtn" href="https://github.com/SiestaJ/statewars-roster-lookup/actions/workflows/refresh-pdf.yml" target="_blank" rel="noopener">Update RHA</a>
+      <a class="button button-red utility-button" id="updateRhaBtn" href="https://www.rollerhockeyalliance.com/player-member-list" target="_blank" rel="noopener">RHA Source</a>
     </section>
 
     <section class="status-row">
@@ -69,6 +73,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260802" type="module"></script>
+  <script src="./app.js?v=20260802b" type="module"></script>
 </body>
 </html>

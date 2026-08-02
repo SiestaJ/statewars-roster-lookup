@@ -1,5 +1,6 @@
 const CONFIG = {
   apiBase: 'https://web.api.digitalshift.ca',
+  statsOrigin: 'https://www.statewarshockey.com',
   clientServiceId: '96e8984e-8187-4798-a562-b3f08dbae794',
   leagueId: 584,
   tournamentId: 3620,
@@ -9,6 +10,7 @@ const CONFIG = {
 
 const state = {
   ticket: null,
+  seasons: [],
   tournaments: [],
   events: [],
   teamsByDivision: [],
@@ -21,6 +23,7 @@ const state = {
 };
 
 const els = {
+  season: document.querySelector('#seasonSelect'),
   tournament: document.querySelector('#tournamentSelect'),
   division: document.querySelector('#divisionSelect'),
   team: document.querySelector('#teamSelect'),
@@ -35,7 +38,18 @@ const els = {
   pdfMeta: document.querySelector('#pdfMeta'),
 };
 
+const STATS_SITES = {
+  'www.statewarshockey.com': '96e8984e-8187-4798-a562-b3f08dbae794',
+  'statewarshockey.com': '96e8984e-8187-4798-a562-b3f08dbae794',
+  'www.torhs.com': 'a965fbb4-8bd6-49eb-8368-736692053dd1',
+  'torhs.com': 'a965fbb4-8bd6-49eb-8368-736692053dd1',
+};
+
 function setBusy(isBusy) {
+  els.season.disabled = isBusy;
+  els.tournament.disabled = isBusy;
+  els.division.disabled = isBusy;
+  els.team.disabled = isBusy;
   els.refresh.disabled = isBusy;
   els.lookup.disabled = isBusy;
   els.applyUrl.disabled = isBusy;
@@ -44,6 +58,23 @@ function setBusy(isBusy) {
 function setStatus(message, isError = false) {
   els.status.textContent = message;
   els.status.classList.toggle('error', isError);
+}
+
+function configureStatsSite(url) {
+  const serviceId = STATS_SITES[url.hostname.toLowerCase()];
+  if (!serviceId) {
+    throw new Error(`Unsupported stats site: ${url.hostname}. Paste a State Wars or TORHS DigitalShift stats URL.`);
+  }
+  CONFIG.statsOrigin = url.origin;
+  if (CONFIG.clientServiceId !== serviceId) {
+    CONFIG.clientServiceId = serviceId;
+    state.ticket = null;
+  }
+}
+
+function currentYearSeason(seasons) {
+  const year = String(new Date().getFullYear());
+  return seasons.find(season => String(season.name) === year || String(season.short_name) === year);
 }
 
 function formatDate(value) {
@@ -212,6 +243,10 @@ function parseTeamsByDivision(teamHtml) {
 }
 
 async function loadEvents() {
+  if (!CONFIG.statsOrigin.includes('statewarshockey.com')) {
+    state.events = [];
+    return;
+  }
   const now = new Date();
   const startDate = `${now.getFullYear()}-01-01`;
   try {
@@ -239,14 +274,18 @@ async function loadTournament(options = {}) {
     const data = await api('/partials/stats/filters', {
       type: 'tournament',
       id: CONFIG.tournamentId,
+      league_id: CONFIG.leagueId,
       autoselect: false,
     });
+    state.seasons = data.season?.options || state.seasons;
     state.tournaments = data.tournament?.options || [];
+    const selectedSeasonId = data.season?.selected_id || state.tournaments.find(t => String(t.id) === String(CONFIG.tournamentId))?.season_id;
     const selectedTournament = state.tournaments.find(t => String(t.id) === String(CONFIG.tournamentId));
     state.currentTournamentName = selectedTournament?.name || `Tournament ${CONFIG.tournamentId}`;
     state.teamsByDivision = (data.division?.options || [])
       .filter(division => String(division.tournament_id) === String(CONFIG.tournamentId))
       .map(division => ({ ...division, teams: [] }));
+    renderSeasonOptions(selectedSeasonId);
     renderTournamentOptions();
     renderDivisionOptions();
     els.division.value = preferredDivisionId ? String(preferredDivisionId) : '';
@@ -306,6 +345,18 @@ async function loadPdfLookup() {
   }
 }
 
+function renderSeasonOptions(selectedSeasonId) {
+  els.season.innerHTML = '';
+  for (const season of state.seasons) {
+    const opt = document.createElement('option');
+    opt.value = season.id;
+    opt.textContent = season.name || season.short_name || `Year ${season.id}`;
+    els.season.appendChild(opt);
+  }
+  const current = selectedSeasonId || currentYearSeason(state.seasons)?.id || state.seasons[0]?.id;
+  if (current) els.season.value = String(current);
+}
+
 function renderTournamentOptions() {
   els.tournament.innerHTML = '';
   for (const tournament of state.tournaments) {
@@ -346,6 +397,31 @@ function renderTeamOptions() {
   }
 }
 
+async function loadSeason(seasonId) {
+  if (!seasonId) return;
+  setBusy(true);
+  setStatus('Loading tournaments for year…');
+  try {
+    const data = await api('/partials/stats/filters', {
+      type: 'season',
+      id: seasonId,
+      autoselect: false,
+    });
+    state.seasons = data.season?.options || state.seasons;
+    state.tournaments = data.tournament?.options || [];
+    const firstTournament = state.tournaments[0];
+    CONFIG.tournamentId = data.tournament?.selected_id || firstTournament?.id || CONFIG.tournamentId;
+    renderSeasonOptions(data.season?.selected_id || seasonId);
+    renderTournamentOptions();
+    await loadTournament();
+  } catch (err) {
+    console.error(err);
+    setStatus(err.message, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function loadTeamsForDivision(divisionId) {
   const division = state.teamsByDivision.find(d => String(d.id) === String(divisionId));
   if (!division) {
@@ -376,19 +452,24 @@ function parsePlayerId(href) {
 function parseTournamentUrl(rawUrl) {
   const value = String(rawUrl || '').trim();
   if (!value) throw new Error('Paste a HockeyShift/State Wars stats URL first.');
-  const url = new URL(value, 'https://www.statewarshockey.com');
+  const url = new URL(value, CONFIG.statsOrigin);
+  configureStatsSite(url);
   if (!url.hash.includes('/')) throw new Error('Paste a stats URL with a # route, e.g. /stats#/584/team/685597.');
   const [pathPart, queryPart = ''] = url.hash.slice(1).split('?');
   const parts = pathPart.split('/').filter(Boolean);
   const params = new URLSearchParams(queryPart);
+  for (const [key, val] of url.searchParams.entries()) {
+    if (!params.has(key)) params.set(key, val);
+  }
   const leagueId = Number(parts[0] || params.get('league_id'));
   const page = parts[1] || '';
   const id = Number(parts[2] || '');
-  const tournamentId = Number(params.get('tournament_id')) || null;
+  const seasonId = Number(params.get('season_id')) || null;
+  const tournamentId = Number(params.get('tournament_id')) || (page === 'tournament' ? id : null);
   const divisionId = Number(params.get('division_id')) || (page === 'division' ? id : null);
-  const teamId = page === 'team' ? id : null;
+  const teamId = page === 'team' ? id : Number(params.get('team_id')) || null;
   if (!leagueId) throw new Error('Could not find a league ID in that stats URL.');
-  return { leagueId, tournamentId, divisionId, teamId };
+  return { leagueId, seasonId, tournamentId, divisionId, teamId };
 }
 
 async function applyTournamentUrl() {
@@ -401,10 +482,27 @@ async function applyTournamentUrl() {
       const data = await api('/partials/stats/filters', {
         type: 'team',
         id: parsed.teamId,
+        league_id: CONFIG.leagueId,
         autoselect: false,
       });
       CONFIG.tournamentId = data.tournament?.selected_id || CONFIG.tournamentId;
       parsed.divisionId = data.division?.selected_id || parsed.divisionId;
+    }
+    if (!parsed.tournamentId && !parsed.teamId) {
+      const data = await api('/partials/stats/filters', {
+        type: parsed.seasonId ? 'season' : 'league',
+        id: parsed.seasonId || CONFIG.leagueId,
+      });
+      state.seasons = data.season?.options || state.seasons;
+      const season = parsed.seasonId
+        ? state.seasons.find(s => String(s.id) === String(parsed.seasonId))
+        : currentYearSeason(state.seasons);
+      if (season && (!data.tournament?.options?.length || String(data.season?.selected_id) !== String(season.id))) {
+        await loadSeason(season.id);
+        return;
+      }
+      state.tournaments = data.tournament?.options || [];
+      CONFIG.tournamentId = data.tournament?.selected_id || state.tournaments[0]?.id || CONFIG.tournamentId;
     }
     await loadTournament({ preferredDivisionId: parsed.divisionId, preferredTeamId: parsed.teamId });
     if (parsed.teamId) await lookupRoster();
@@ -434,7 +532,7 @@ function parseRoster(rosterHtml) {
       name,
       position: metaMatch?.[2] || '',
       playerId,
-      sourceUrl: `https://www.statewarshockey.com/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
+      sourceUrl: `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
     });
     seen.add(playerId);
   }
@@ -450,7 +548,7 @@ function parseRoster(rosterHtml) {
       name: cells[1],
       position: cells[2],
       playerId,
-      sourceUrl: `https://www.statewarshockey.com/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
+      sourceUrl: `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/player/${playerId}/bio`,
     });
     seen.add(playerId);
   }
@@ -623,6 +721,7 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+els.season.addEventListener('change', async () => { await loadSeason(els.season.value); });
 els.tournament.addEventListener('change', async () => { CONFIG.tournamentId = Number(els.tournament.value); await loadTournament(); });
 els.division.addEventListener('change', async () => { await loadTeamsForDivision(els.division.value); await lookupRoster(); });
 els.team.addEventListener('change', lookupRoster);
