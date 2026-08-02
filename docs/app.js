@@ -25,6 +25,7 @@ const els = {
   status: document.querySelector('#status'),
   counts: document.querySelector('#counts'),
   body: document.querySelector('#resultsBody'),
+  pdfMeta: document.querySelector('#pdfMeta'),
 };
 
 function setBusy(isBusy) {
@@ -35,6 +36,42 @@ function setBusy(isBusy) {
 function setStatus(message, isError = false) {
   els.status.textContent = message;
   els.status.classList.toggle('error', isError);
+}
+
+function formatDate(value) {
+  if (!value) return '';
+  const dateOnly = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    return `${Number(month)}/${Number(day)}/${year}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/New_York',
+  }).format(date);
+}
+
+function renderPdfMeta() {
+  if (!els.pdfMeta) return;
+  const meta = state.pdfMeta || {};
+  if (meta.warning) {
+    els.pdfMeta.textContent = meta.warning;
+    els.pdfMeta.classList.add('error');
+    return;
+  }
+  els.pdfMeta.classList.remove('error');
+  const fetched = formatDate(meta.fetched_at || meta.generated_at);
+  const pdfDated = formatDate(meta.pdf_dated || meta.pdf_date);
+  const count = meta.count ? `${Number(meta.count).toLocaleString()} names` : `${state.pdfRows.length.toLocaleString()} names`;
+  const pieces = [];
+  if (fetched) pieces.push(`Fetched ${fetched}`);
+  if (pdfDated) pieces.push(`RHA PDF dated ${pdfDated}`);
+  pieces.push(count);
+  els.pdfMeta.textContent = pieces.join(' · ');
 }
 
 function normalizeName(name) {
@@ -154,6 +191,7 @@ async function loadPdfLookup() {
     const data = await res.json();
     state.pdfMeta = data.meta || null;
     state.pdfRows = data.players || [];
+    renderPdfMeta();
     state.pdfByName = new Map();
     state.pdfByLast = new Map();
     for (const row of state.pdfRows) {
@@ -181,6 +219,7 @@ async function loadPdfLookup() {
     state.pdfRows = [];
     state.pdfByName = new Map();
     state.pdfByLast = new Map();
+    renderPdfMeta();
   }
 }
 
@@ -306,7 +345,7 @@ function renderResults() {
   }
   const rows = state.roster.filter(p => {
     if (!query) return true;
-    return normalizeName(`${p.number} ${p.name} ${p.position}`).includes(query);
+    return normalizeName(`${p.number} ${p.name}`).includes(query);
   });
   const outcomes = rows.map(player => ({ player, match: getPdfMatch(player) }));
   const matched = outcomes.filter(o => o.match.status === 'matched').length;
@@ -316,7 +355,7 @@ function renderResults() {
   els.counts.textContent = `${rows.length} shown · ${matched} matched · ${review} review · ${missing} missing · ${pdfCount.toLocaleString()} PDF rows`;
   els.body.innerHTML = '';
   if (!rows.length) {
-    els.body.innerHTML = '<tr><td colspan="5" class="empty">No roster rows match the filter.</td></tr>';
+    els.body.innerHTML = '<tr><td colspan="4" class="empty">No roster rows match the filter.</td></tr>';
     return;
   }
   for (const { player, match } of outcomes) {
@@ -324,7 +363,6 @@ function renderResults() {
     tr.innerHTML = `
       <td class="num">${escapeHtml(player.number)}</td>
       <td><div class="player">${escapeHtml(player.name)}</div><div class="meta">HockeyShift ID: ${escapeHtml(player.playerId)}</div></td>
-      <td>${escapeHtml(player.position)}</td>
       <td><span class="badge ${escapeHtml(match.status)}">${escapeHtml(match.label)}</span><div class="meta">${escapeHtml(match.confidence)}</div></td>
       <td>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<span class="meta">—</span>'}</td>`;
     els.body.appendChild(tr);
@@ -342,7 +380,7 @@ function renderPdfNameLookup(query) {
   els.body.innerHTML = '';
   if (!query) {
     els.counts.textContent = `${pdfCount.toLocaleString()} PDF rows indexed`;
-    els.body.innerHTML = '<tr><td colspan="5" class="empty">No team selected. Choose a team, or search the RHA PDF by last name.</td></tr>';
+    els.body.innerHTML = '<tr><td colspan="4" class="empty">No team selected. Choose a team, or search the RHA PDF by last name.</td></tr>';
     return;
   }
   const qCompact = compact(query);
@@ -353,7 +391,7 @@ function renderPdfNameLookup(query) {
   }).slice(0, 100);
   els.counts.textContent = `${matches.length} PDF name matches · ${pdfCount.toLocaleString()} PDF rows indexed`;
   if (!matches.length) {
-    els.body.innerHTML = `<tr><td colspan="5" class="empty">No RHA PDF names match “${escapeHtml(query)}”.</td></tr>`;
+    els.body.innerHTML = `<tr><td colspan="4" class="empty">No RHA PDF names match “${escapeHtml(query)}”.</td></tr>`;
     return;
   }
   for (const match of matches) {
@@ -361,7 +399,6 @@ function renderPdfNameLookup(query) {
     tr.innerHTML = `
       <td class="num">—</td>
       <td><div class="player">${escapeHtml(match.name || `${match.first || ''} ${match.last || ''}`)}</div><div class="meta">RHA PDF lookup</div></td>
-      <td>${escapeHtml(match.state || '')}</td>
       <td><span class="badge matched">PDF row</span><div class="meta">name/last-name match</div></td>
       <td>${formatPdfMatch(match)}</td>`;
     els.body.appendChild(tr);

@@ -22,6 +22,7 @@ import tempfile
 from datetime import datetime, timezone
 from html import unescape
 from pathlib import Path
+from urllib.parse import unquote
 from urllib.request import Request, urlopen
 
 try:
@@ -73,6 +74,34 @@ def fetch_pdf(url: str) -> Path:
     with os.fdopen(fd, "wb") as f:
         f.write(data)
     return Path(tmp)
+
+
+def infer_pdf_dated(pdf_url: str, pdf_path: Path) -> str | None:
+    """Infer the date printed/encoded for the current RHA PDF.
+
+    The RHA file names normally encode dates like "RHA 71626UPD.pdf".
+    Keep this as metadata for the static app header so users can tell when the
+    PDF itself was dated versus when this repo fetched it.
+    """
+    decoded_url = unquote(pdf_url)
+    match = re.search(r"RHA\s*([01]?\d)([0-3]\d)(\d{2})(?:\D|$)", decoded_url, re.I)
+    if match:
+        month, day, year = match.groups()
+        return f"20{year}-{int(month):02d}-{int(day):02d}"
+
+    try:
+        reader = PdfReader(str(pdf_path))
+        metadata = reader.metadata or {}
+        for key in ("/Title", "/Subject"):
+            value = str(metadata.get(key, ""))
+            match = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})", value)
+            if match:
+                month, day, year = match.groups()
+                year = year if len(year) == 4 else f"20{year}"
+                return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+    except Exception:
+        return None
+    return None
 
 
 def split_rha_row(line: str) -> tuple[str, str, str] | None:
@@ -127,6 +156,7 @@ def main() -> int:
     pdf_url = PDF_URL or discover_pdf_url(RHA_PAGE_URL)
     pdf_path = fetch_pdf(pdf_url)
     try:
+        pdf_dated = infer_pdf_dated(pdf_url, pdf_path)
         players = extract_rows(pdf_path)
     finally:
         pdf_path.unlink(missing_ok=True)
@@ -137,6 +167,8 @@ def main() -> int:
         "meta": {
             "source": pdf_url,
             "rha_page_url": RHA_PAGE_URL,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "pdf_dated": pdf_dated,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "count": len(players),
             "matching": "exact normalized first+last; same-last/first-initial review in app",

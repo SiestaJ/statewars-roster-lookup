@@ -9,12 +9,21 @@
 <body>
   <main class="shell">
     <header class="hero">
-      <div>
-        <p class="eyebrow">State Wars Hockey</p>
-        <h1>Roster RHA Lookup</h1>
-        <p class="subhead">Pick a division and team. The roster comes live from HockeyShift/DigitalShift, then matches against the current RHA PDF.</p>
+      <div class="brand-card" aria-label="State Wars Roster RHA Lookup">
+        <div class="statewars-logo" aria-hidden="true">
+          <span class="logo-mark">🏒</span>
+        </div>
+        <div class="brand-copy">
+          <p class="eyebrow">State Wars Hockey</p>
+          <h1>Roster RHA Lookup</h1>
+          <p class="subhead">Pick a division and team. The roster comes live from HockeyShift/DigitalShift, then matches against the current RHA PDF.</p>
+          <div id="pdfMeta" class="pdf-meta">Loading RHA PDF status…</div>
+        </div>
+        <div class="hero-actions">
+          <a class="button button-red" id="updateRhaBtn" href="https://github.com/SiestaJ/statewars-roster-lookup/actions/workflows/refresh-pdf.yml" target="_blank" rel="noopener">Update RHA list</a>
+          <button id="refreshBtn" class="button button-white" type="button">Refresh tournament</button>
+        </div>
       </div>
-      <button id="refreshBtn" type="button">Refresh tournament</button>
     </header>
 
     <section class="card controls" aria-label="Lookup controls">
@@ -30,7 +39,7 @@
         Last Name
         <input id="searchInput" type="search" placeholder="Last Name" autocomplete="off" />
       </label>
-      <button id="lookupBtn" type="button">Lookup roster</button>
+      <button id="lookupBtn" class="button" type="button">Lookup roster</button>
     </section>
 
     <section class="status-row">
@@ -38,30 +47,22 @@
       <div id="counts" class="counts"></div>
     </section>
 
-    <section class="card">
+    <section class="card results-card">
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th>#</th>
               <th>Player</th>
-              <th>Pos</th>
               <th>RHA Match</th>
               <th>RHA Details</th>
             </tr>
           </thead>
           <tbody id="resultsBody">
-            <tr><td colspan="5" class="empty">Choose a team.</td></tr>
+            <tr><td colspan="4" class="empty">Choose a team.</td></tr>
           </tbody>
         </table>
       </div>
-    </section>
-
-    <section class="card notes">
-      <h2>Data sources</h2>
-      <ul>
-        <li>RHA lookup: <code>docs/data/pdf_lookup.json</code></li>
-      </ul>
     </section>
   </main>
 
