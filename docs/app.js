@@ -9,6 +9,8 @@ const CONFIG = {
 };
 
 const OVERRIDE_STORAGE_KEY = 'statewars-rha-status-overrides-v1';
+const TOURNAMENT_OPS_COLLAPSED_KEY = 'statewars-rha-tournament-ops-collapsed-v1';
+
 
 const state = {
   ticket: null,
@@ -24,6 +26,17 @@ const state = {
   roster: [],
   activeStatusFilter: 'all',
   statusOverrides: loadStatusOverrides(),
+  tournamentOps: {
+    key: '',
+    players: [],
+    outcomes: [],
+    summary: { total: 0, matched: 0, verify: 0, missing: 0, verifiedPct: 0 },
+    isScanning: false,
+    progress: 0,
+    totalDivisions: 0,
+    error: '',
+    collapsed: loadTournamentOpsCollapsed(),
+  },
 };
 
 const els = {
@@ -50,6 +63,7 @@ const els = {
   body: document.querySelector('#resultsBody'),
   pdfMeta: document.querySelector('#pdfMeta'),
   opsOverview: document.querySelector('#opsOverview'),
+  tournamentOps: document.querySelector('#tournamentOps'),
 };
 
 const STATS_SITES = {
@@ -268,6 +282,22 @@ function loadStatusOverrides() {
   }
 }
 
+function loadTournamentOpsCollapsed() {
+  try {
+    return localStorage.getItem(TOURNAMENT_OPS_COLLAPSED_KEY) === '1';
+  } catch (err) {
+    return false;
+  }
+}
+
+function saveTournamentOpsCollapsed() {
+  try {
+    localStorage.setItem(TOURNAMENT_OPS_COLLAPSED_KEY, state.tournamentOps.collapsed ? '1' : '0');
+  } catch (err) {
+    console.warn('Could not save tournament ops card state:', err);
+  }
+}
+
 function saveStatusOverrides() {
   try {
     localStorage.setItem(OVERRIDE_STORAGE_KEY, JSON.stringify(state.statusOverrides));
@@ -276,13 +306,13 @@ function saveStatusOverrides() {
   }
 }
 
-function overrideScopeKey() {
-  const pdfStamp = state.pdfMeta?.pdf_dated || state.pdfMeta?.source || 'pdf';
-  return [CONFIG.leagueId, CONFIG.tournamentId, els.division?.value || 'division', pdfStamp].join(':');
+function overrideScopeKey(divisionId = els.division?.value || 'division') {
+  const pdfStamp = state.pdfMeta?.pdf_dated || state.pdfMeta?.generated_at || 'pdf';
+  return [CONFIG.leagueId, CONFIG.tournamentId, divisionId || 'division', pdfStamp].join(':');
 }
 
 function playerOverrideKey(player) {
-  return `${overrideScopeKey()}:${player.playerId || compact(player.name)}`;
+  return `${overrideScopeKey(player.divisionId)}:${player.playerId || compact(player.name)}`;
 }
 
 function getSavedStatus(player) {
@@ -294,7 +324,9 @@ function setSavedStatus(player, status) {
   if (status) state.statusOverrides[key] = status;
   else delete state.statusOverrides[key];
   saveStatusOverrides();
+  refreshTournamentOpsMatches();
   renderResults();
+  renderTournamentOps();
 }
 
 async function api(path, params = {}, { auth = true } = {}) {
@@ -413,11 +445,14 @@ async function loadTournament(options = {}) {
     else renderTeamOptions();
     els.team.value = preferredTeamId ? String(preferredTeamId) : (keepTeam ? els.team.value : '');
     state.roster = [];
+    resetTournamentOps();
     renderResults();
+    renderTournamentOps();
     const event = findMatchingEvent(selectedTournament);
     const source = event ? ` Matched event: ${event.name} (${eventDateLabel(event)}).` : '';
     setStatus(`Loaded ${state.teamsByDivision.length} divisions for ${state.currentTournamentName}.${source} Choose a division, then load players. You can still search the RHA PDF by last name.`);
     closeUtilityMenu();
+    startTournamentOpsScan();
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
@@ -704,9 +739,13 @@ async function lookupRoster() {
       game_type: 'Round Robin',
       player_type: 'players',
     });
-    state.roster = parseDivisionPlayers(data.content);
-    renderResults();
     const divisionName = els.division.selectedOptions[0]?.textContent || `division ${divisionId}`;
+    state.roster = parseDivisionPlayers(data.content).map(player => ({
+      ...player,
+      divisionId,
+      divisionName,
+    }));
+    renderResults();
     setStatus(`Loaded ${state.roster.length} players for ${divisionName} in ${state.currentTournamentName}.`);
   } catch (err) {
     console.error(err);
@@ -813,9 +852,161 @@ function summarizeOutcomes(outcomes) {
   };
 }
 
+
+function tournamentOpsKey() {
+  const pdfStamp = state.pdfMeta?.pdf_dated || state.pdfMeta?.generated_at || 'pdf';
+  return [CONFIG.leagueId, CONFIG.tournamentId, pdfStamp].join(':');
+}
+
+function resetTournamentOps() {
+  state.tournamentOps.key = tournamentOpsKey();
+  state.tournamentOps.players = [];
+  state.tournamentOps.outcomes = [];
+  state.tournamentOps.summary = { total: 0, matched: 0, verify: 0, missing: 0, verifiedPct: 0 };
+  state.tournamentOps.isScanning = false;
+  state.tournamentOps.progress = 0;
+  state.tournamentOps.totalDivisions = state.teamsByDivision.length;
+  state.tournamentOps.error = '';
+}
+
+function summarizeTournamentOutcomes(outcomes) {
+  const summary = summarizeOutcomes(outcomes);
+  summary.verifiedPct = summary.total ? Math.round((summary.matched / summary.total) * 1000) / 10 : 0;
+  return summary;
+}
+
+function refreshTournamentOpsMatches() {
+  if (!state.tournamentOps.players.length) return;
+  state.tournamentOps.outcomes = state.tournamentOps.players.map(player => ({ player, match: getPdfMatch(player) }));
+  state.tournamentOps.summary = summarizeTournamentOutcomes(state.tournamentOps.outcomes);
+}
+
+function renderTournamentOps() {
+  if (!els.tournamentOps) return;
+  const ops = state.tournamentOps;
+  const summary = ops.summary || {};
+  const progress = ops.totalDivisions ? `${ops.progress}/${ops.totalDivisions} divisions` : 'Waiting for divisions';
+  const scanText = ops.isScanning ? `Scanning ${progress}…` : (ops.error || (summary.total ? `Scanned ${progress}` : 'Loading tournament totals…'));
+  const bodyHidden = ops.collapsed ? ' hidden' : '';
+  const collapsedLabel = ops.collapsed ? 'Expand' : 'Roll up';
+  const pct = Number(summary.verifiedPct || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const actionsDisabled = ops.isScanning || !summary.total;
+  const card = (kind, label, value, hint) => `<button class="tournament-stat ${kind}" type="button" data-tournament-filter="${kind}" ${actionsDisabled ? 'disabled' : ''}><span>${label}</span><strong>${value}</strong><em>${hint}</em></button>`;
+  els.tournamentOps.innerHTML = `
+    <div class="tournament-ops-head">
+      <div>
+        <div class="eyebrow">Tournament RHA totals</div>
+        <h2>${escapeHtml(state.currentTournamentName || `Tournament ${CONFIG.tournamentId}`)}</h2>
+        <div class="meta">${escapeHtml(scanText)}</div>
+      </div>
+      <button class="button button-white tiny-button" type="button" data-tournament-collapse>${collapsedLabel}</button>
+    </div>
+    <div class="tournament-ops-body"${bodyHidden}>
+      <div class="tournament-stat-grid">
+        ${card('all', 'Total players', (summary.total || 0).toLocaleString(), 'all loaded roster rows')}
+        ${card('matched', 'RHA verified', (summary.matched || 0).toLocaleString(), 'exact + confirmed')}
+        ${card('verify', 'Verify needed', (summary.verify || 0).toLocaleString(), 'opens review workflow')}
+        ${card('missing', 'Missing', (summary.missing || 0).toLocaleString(), 'exports missing CSV')}
+        ${card('verified', 'Verified %', `${pct}%`, 'RHA verified / total')}
+      </div>
+      <div class="tournament-actions">
+        <button class="button tiny-button" type="button" data-tournament-rescan ${ops.isScanning ? 'disabled' : ''}>Rescan tournament</button>
+        <button class="button button-white tiny-button" type="button" data-tournament-export="missing" ${summary.missing && !ops.isScanning ? '' : 'disabled'}>Export missing CSV</button>
+      </div>
+    </div>`;
+}
+
+async function startTournamentOpsScan({ force = false } = {}) {
+  if (!els.tournamentOps || state.tournamentOps.isScanning || !state.teamsByDivision.length || !state.pdfRows.length) return;
+  const key = tournamentOpsKey();
+  if (!force && state.tournamentOps.key === key && state.tournamentOps.players.length) return;
+  state.tournamentOps.key = key;
+  state.tournamentOps.players = [];
+  state.tournamentOps.outcomes = [];
+  state.tournamentOps.summary = { total: 0, matched: 0, verify: 0, missing: 0, verifiedPct: 0 };
+  state.tournamentOps.isScanning = true;
+  state.tournamentOps.progress = 0;
+  state.tournamentOps.totalDivisions = state.teamsByDivision.length;
+  state.tournamentOps.error = '';
+  renderTournamentOps();
+  try {
+    const players = [];
+    for (const division of state.teamsByDivision) {
+      const data = await api('/partials/stats/leaders/table', {
+        division_id: division.id,
+        game_type: 'Round Robin',
+        player_type: 'players',
+      });
+      const divisionPlayers = parseDivisionPlayers(data.content).map(player => ({
+        ...player,
+        divisionId: division.id,
+        divisionName: division.name,
+      }));
+      players.push(...divisionPlayers);
+      state.tournamentOps.progress += 1;
+      state.tournamentOps.players = players;
+      refreshTournamentOpsMatches();
+      renderTournamentOps();
+    }
+  } catch (err) {
+    console.error(err);
+    state.tournamentOps.error = `Tournament scan stopped: ${err.message}`;
+  } finally {
+    state.tournamentOps.isScanning = false;
+    refreshTournamentOpsMatches();
+    renderTournamentOps();
+  }
+}
+
+function showTournamentWorkflow(status) {
+  if (!state.tournamentOps.outcomes.length) return;
+  const normalized = status === 'verified' ? 'matched' : status;
+  const rows = state.tournamentOps.outcomes.filter(({ match }) => normalized === 'all' || match.status === normalized);
+  state.roster = rows.map(({ player }) => player);
+  state.activeStatusFilter = normalized === 'all' ? 'all' : normalized;
+  els.division.value = '';
+  els.team.value = '';
+  els.search.value = '';
+  renderTeamOptions();
+  renderResults();
+  const label = normalized === 'all' ? 'all tournament players' : `${statusLabel(normalized)} tournament workflow`;
+  setStatus(`Opened ${rows.length.toLocaleString()} ${label}.`);
+  document.querySelector('.results-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function exportTournamentStatus(status = 'missing') {
+  const rows = state.tournamentOps.outcomes.filter(({ match }) => status === 'all' || match.status === status);
+  if (!rows.length) return;
+  const header = ['Status', 'Player', 'Team', 'Division', 'HockeyShift ID', 'Player URL', 'Team URL', 'Division URL', 'RHA Candidates'];
+  const lines = [header.map(csvCell).join(',')];
+  for (const { player, match } of rows) {
+    lines.push([
+      statusLabel(match.status),
+      player.name,
+      player.team,
+      player.divisionName,
+      player.playerId,
+      player.sourceUrl,
+      player.teamId ? teamUrl(player.teamId) : '',
+      divisionUrl(player.divisionId),
+      match.matches.map(m => `${m.first || ''} ${m.last || ''} ${m.state || ''}`.trim()).join('; '),
+    ].map(csvCell).join(','));
+  }
+  const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${compact(state.currentTournamentName || 'statewars')}-tournament-${status}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+  setStatus(`Exported ${rows.length.toLocaleString()} ${statusLabel(status)} tournament rows.`);
+}
+
 function renderOpsOverview(allOutcomes) {
   if (!els.opsOverview) return;
-  if (!state.roster.length) {
+  const isTournamentWorkflow = !els.division.value && state.roster.some(player => player.divisionId);
+  if (!state.roster.length || isTournamentWorkflow) {
     els.opsOverview.hidden = true;
     return;
   }
@@ -892,19 +1083,21 @@ function renderResults() {
     return;
   }
   outcomes.forEach(({ player, match }, index) => {
-    const detailId = `details-${escapeHtml(player.playerId || index)}`;
+    const detailId = `details-${escapeHtml(player.divisionId || 'division')}-${escapeHtml(player.playerId || index)}`;
     const tr = document.createElement('tr');
     tr.className = 'player-row';
     tr.tabIndex = 0;
     tr.setAttribute('aria-expanded', 'false');
     tr.setAttribute('aria-controls', detailId);
     const teamHref = player.teamId ? teamUrl(player.teamId) : '';
+    const divHref = divisionUrl(player.divisionId || els.division.value);
+    const divLabel = player.divisionName || 'Division';
     tr.innerHTML = `
       <td class="num">${escapeHtml(player.number)}</td>
       <td>
         <div class="player"><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener" data-player-page-link="true">${escapeHtml(player.name)}</a></div>
         <div class="meta links-line">
-          <a href="${escapeHtml(divisionUrl())}" target="_blank" rel="noopener">Division</a>
+          <a href="${escapeHtml(divHref)}" target="_blank" rel="noopener">${escapeHtml(divLabel)}</a>
           ${teamHref ? `<span>·</span><span>${escapeHtml(player.team || 'Team')}</span>` : `<span>· ${escapeHtml(player.team || '')}</span>`}
           <span>·</span><a href="${escapeHtml(player.sourceUrl)}" target="_blank" rel="noopener" data-player-page-link="true">HockeyShift ID: ${escapeHtml(player.playerId)}</a>
         </div>
@@ -916,9 +1109,9 @@ function renderResults() {
     detail.hidden = true;
     const verifiedChecked = isUserVerified(player) ? ' checked' : '';
     const verifyCheckbox = match.baseStatus === 'verify'
-      ? `<label class="verify-control"><input type="checkbox"${verifiedChecked} data-verify-action="${isUserVerified(player) ? 'reset' : 'matched'}" data-player-id="${escapeHtml(player.playerId)}"> User verified this RHA match</label>`
+      ? `<label class="verify-control"><input type="checkbox"${verifiedChecked} data-verify-action="${isUserVerified(player) ? 'reset' : 'matched'}" data-player-id="${escapeHtml(player.playerId)}" data-division-id="${escapeHtml(player.divisionId || '')}"> User verified this RHA match</label>`
       : '';
-    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.overrideLabel || match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}<div class="verify-actions">${verifyCheckbox}<button type="button" class="button tiny-button button-white" data-verify-action="missing" data-player-id="${escapeHtml(player.playerId)}">Mark missing</button>${match.overridden ? `<button type="button" class="button tiny-button button-white" data-verify-action="reset" data-player-id="${escapeHtml(player.playerId)}">Reset</button>` : ''}</div></div></td>`;
+    detail.innerHTML = `<td colspan="3"><div class="detail-panel"><strong>${escapeHtml(match.label)}</strong><div class="meta">${escapeHtml(match.overrideLabel || match.confidence)}</div>${match.matches.length ? match.matches.map(formatPdfMatch).join('<hr>') : '<div class="meta">No RHA PDF match.</div>'}<div class="verify-actions">${verifyCheckbox}<button type="button" class="button tiny-button button-white" data-verify-action="missing" data-player-id="${escapeHtml(player.playerId)}" data-division-id="${escapeHtml(player.divisionId || '')}">Mark missing</button>${match.overridden ? `<button type="button" class="button tiny-button button-white" data-verify-action="reset" data-player-id="${escapeHtml(player.playerId)}" data-division-id="${escapeHtml(player.divisionId || '')}">Reset</button>` : ''}</div></div></td>`;
     const setDetailsOpen = open => {
       detail.hidden = !open;
       tr.setAttribute('aria-expanded', String(open));
@@ -1022,8 +1215,9 @@ function renderPdfNameLookup(query) {
   });
 }
 
-function findPlayerById(playerId) {
-  return state.roster.find(player => String(player.playerId) === String(playerId));
+function findPlayerById(playerId, divisionId = '') {
+  return state.roster.find(player => String(player.playerId) === String(playerId) && (!divisionId || String(player.divisionId || '') === String(divisionId)))
+    || state.tournamentOps.players.find(player => String(player.playerId) === String(playerId) && (!divisionId || String(player.divisionId || '') === String(divisionId)));
 }
 
 function csvCell(value) {
@@ -1046,11 +1240,11 @@ function exportMissingVerify() {
       statusLabel(match.status),
       player.name,
       player.team,
-      divisionName,
+      player.divisionName || divisionName,
       player.playerId,
       player.sourceUrl,
       player.teamId ? teamUrl(player.teamId) : '',
-      divisionUrl(),
+      divisionUrl(player.divisionId || els.division.value),
       isUserVerified(player) ? 'yes' : 'no',
       match.matches.map(m => `${m.first || ''} ${m.last || ''} ${m.state || ''}`.trim()).join('; '),
     ].map(csvCell).join(','));
@@ -1095,6 +1289,30 @@ els.search.addEventListener('input', renderResults);
 els.export.addEventListener('click', exportMissingVerify);
 document.addEventListener('click', event => {
   if (els.menuPanel && !els.menuPanel.hidden && !event.target.closest('.utility-menu')) closeUtilityMenu();
+  const collapseButton = event.target.closest('[data-tournament-collapse]');
+  if (collapseButton) {
+    state.tournamentOps.collapsed = !state.tournamentOps.collapsed;
+    saveTournamentOpsCollapsed();
+    renderTournamentOps();
+    return;
+  }
+  const rescanButton = event.target.closest('[data-tournament-rescan]');
+  if (rescanButton) {
+    startTournamentOpsScan({ force: true });
+    return;
+  }
+  const tournamentExport = event.target.closest('[data-tournament-export]');
+  if (tournamentExport) {
+    exportTournamentStatus(tournamentExport.dataset.tournamentExport || 'missing');
+    return;
+  }
+  const tournamentFilter = event.target.closest('[data-tournament-filter]');
+  if (tournamentFilter) {
+    const filter = tournamentFilter.dataset.tournamentFilter || 'all';
+    if (filter === 'missing') exportTournamentStatus('missing');
+    else showTournamentWorkflow(filter);
+    return;
+  }
   const statusButton = event.target.closest('[data-status-filter]');
   if (statusButton) {
     state.activeStatusFilter = statusButton.dataset.statusFilter || 'all';
@@ -1110,7 +1328,7 @@ document.addEventListener('click', event => {
   }
   const verifyButton = event.target.closest('[data-verify-action]');
   if (verifyButton) {
-    const player = findPlayerById(verifyButton.dataset.playerId);
+    const player = findPlayerById(verifyButton.dataset.playerId, verifyButton.dataset.divisionId || '');
     if (!player) return;
     const action = verifyButton.dataset.verifyAction;
     setSavedStatus(player, action === 'reset' ? null : action);

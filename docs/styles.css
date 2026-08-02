@@ -185,6 +185,33 @@ th:first-child, .num { width: 64px; }
 .rha-yes { background: #e9f7ef; color: var(--green); }
 .rha-verify { background: #fff4e0; color: #b86c00; }
 .rha-no { background: #fdecec; color: var(--red); }
+
+.tournament-ops { display: grid; gap: 14px; }
+.tournament-ops-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.tournament-ops-body[hidden] { display: none; }
+.tournament-stat-grid { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; }
+.tournament-stat {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-height: 86px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+  text-align: left;
+}
+.tournament-stat:hover { background: #f8fbff; }
+.tournament-stat:disabled { cursor: wait; background: #f6f9fc; color: var(--muted); }
+.tournament-stat span { color: var(--muted); font-size: 11px; font-weight: 1000; letter-spacing: .06em; text-transform: uppercase; }
+.tournament-stat strong { font-size: clamp(24px, 4vw, 34px); line-height: 1; }
+.tournament-stat em { color: var(--muted); font-size: 11px; font-style: normal; font-weight: 800; }
+.tournament-stat.matched strong, .tournament-stat.verified strong { color: var(--green); }
+.tournament-stat.verify strong { color: #b86c00; }
+.tournament-stat.missing strong { color: var(--red); }
+.tournament-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .ops-overview[hidden], .results-actions [hidden] { display: none; }
 .ops-overview { display: grid; gap: 16px; }
 .ops-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
@@ -251,6 +278,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 9px 0; }
   .status-row { display: grid; }
   .ops-head { display: grid; }
   .summary-pills { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+  .tournament-ops-head { display: grid; }
+  .tournament-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tournament-stat.verified { grid-column: 1 / -1; }
+  .tournament-actions { justify-content: stretch; }
+  .tournament-actions .button { width: 100%; }
   .team-grid { grid-template-columns: 1fr; }
   .results-actions { justify-content: stretch; }
   .results-actions .button { width: 100%; }
