@@ -887,21 +887,29 @@ function renderTournamentOps() {
   const progress = ops.totalDivisions ? `${ops.progress}/${ops.totalDivisions} divisions` : 'Waiting for divisions';
   const hasTotals = summary.total > 0;
   const scanText = ops.isScanning ? `Scanning ${progress}…` : (ops.error || (hasTotals ? `Scanned ${progress}` : 'Tournament totals load on request.'));
-  const bodyHidden = ops.collapsed ? ' hidden' : '';
-  const collapsedLabel = ops.collapsed ? 'Expand' : 'Roll up';
+  const expanded = !ops.collapsed;
+  const bodyHidden = expanded ? '' : ' hidden';
   const pct = Number(summary.verifiedPct || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
   const actionsDisabled = ops.isScanning || !hasTotals;
+  const chip = (kind, label, value) => `<span class="ops-chip ${kind}"><b>${value}</b><i>${label}</i></span>`;
   const card = (kind, label, value, hint) => `<button class="tournament-stat ${kind}" type="button" data-tournament-filter="${kind}" ${actionsDisabled ? 'disabled' : ''}><span>${label}</span><strong>${value}</strong><em>${hint}</em></button>`;
   els.tournamentOps.innerHTML = `
-    <div class="tournament-ops-head">
-      <div>
-        <div class="eyebrow">Tournament RHA totals</div>
-        <h2>${escapeHtml(state.currentTournamentName || `Tournament ${CONFIG.tournamentId}`)}</h2>
-        <div class="meta">${escapeHtml(scanText)}</div>
-      </div>
-      <button class="button button-white tiny-button" type="button" data-tournament-collapse>${collapsedLabel}</button>
-    </div>
+    <button class="tournament-ops-strip" type="button" data-tournament-collapse aria-expanded="${expanded}" aria-label="${expanded ? 'Hide' : 'Show'} tournament detail">
+      <span class="strip-name">
+        <span class="eyebrow">Tournament RHA totals</span>
+        <span class="strip-title">${escapeHtml(state.currentTournamentName || `Tournament ${CONFIG.tournamentId}`)}</span>
+      </span>
+      <span class="ops-strip-kpis">
+        ${chip('all', 'Players', (summary.total || 0).toLocaleString())}
+        ${chip('matched', 'Verified', (summary.matched || 0).toLocaleString())}
+        ${chip('verify', 'Review', (summary.verify || 0).toLocaleString())}
+        ${chip('missing', 'Missing', (summary.missing || 0).toLocaleString())}
+        ${chip('verified', 'RHA %', `${pct}%`)}
+      </span>
+      <span class="strip-caret" aria-hidden="true">${expanded ? '▴' : '▾'}</span>
+    </button>
     <div class="tournament-ops-body"${bodyHidden}>
+      <div class="meta">${escapeHtml(scanText)}</div>
       <div class="tournament-stat-grid">
         ${card('all', 'Total players', (summary.total || 0).toLocaleString(), 'all loaded roster rows')}
         ${card('matched', 'RHA verified', (summary.matched || 0).toLocaleString(), 'exact + confirmed')}
@@ -1287,10 +1295,20 @@ els.tournamentUrl.addEventListener('keydown', event => { if (event.key === 'Ente
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeUtilityMenu(); });
 els.search.addEventListener('input', renderResults);
 els.export.addEventListener('click', exportMissingVerify);
+let opsUserToggled = false;
+window.addEventListener('scroll', () => {
+  if (opsUserToggled) return;
+  if (window.scrollY > 140 && !state.tournamentOps.collapsed) {
+    state.tournamentOps.collapsed = true;
+    saveTournamentOpsCollapsed();
+    renderTournamentOps();
+  }
+}, { passive: true });
 document.addEventListener('click', event => {
   if (els.menuPanel && !els.menuPanel.hidden && !event.target.closest('.utility-menu')) closeUtilityMenu();
   const collapseButton = event.target.closest('[data-tournament-collapse]');
   if (collapseButton) {
+    opsUserToggled = true;
     state.tournamentOps.collapsed = !state.tournamentOps.collapsed;
     saveTournamentOpsCollapsed();
     renderTournamentOps();
