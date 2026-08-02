@@ -134,8 +134,6 @@ async function loadTournament() {
     });
     state.teamsByDivision = parseTeamsByDivision(data.content);
     renderDivisionOptions();
-    const targetDivision = state.teamsByDivision.find(d => d.teams?.some(t => Number(t.id) === CONFIG.seedTeamId));
-    if (targetDivision) els.division.value = String(targetDivision.id);
     renderTeamOptions();
     els.team.value = '';
     state.roster = [];
@@ -188,6 +186,10 @@ async function loadPdfLookup() {
 
 function renderDivisionOptions() {
   els.division.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = 'Select a Division...';
+  els.division.appendChild(blank);
   for (const division of state.teamsByDivision) {
     const opt = document.createElement('option');
     opt.value = division.id;
@@ -379,4 +381,5 @@ els.refresh.addEventListener('click', async () => { await loadTournament(); awai
 els.search.addEventListener('input', renderResults);
 
 await loadPdfLookup();
+els.search.value = '';
 await loadTournament();
