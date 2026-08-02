@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>State Wars Roster Lookup</title>
   <link rel="icon" href="./assets/statewars-logo.jpg" />
-  <link rel="stylesheet" href="./styles.css?v=20260802d" />
+  <link rel="stylesheet" href="./styles.css?v=20260802e" />
 </head>
 <body>
   <main class="shell">
@@ -21,29 +21,29 @@
 
     <section class="card controls" aria-label="Lookup controls">
       <label>
-        Year
-        <select id="seasonSelect"></select>
+        <span class="sr-only">Year</span>
+        <select id="seasonSelect" aria-label="Year"></select>
       </label>
       <label>
-        Tournament
-        <select id="tournamentSelect"></select>
+        <span class="sr-only">Tournament</span>
+        <select id="tournamentSelect" aria-label="Tournament"></select>
       </label>
       <label>
-        Division
-        <select id="divisionSelect"></select>
+        <span class="sr-only">Division</span>
+        <select id="divisionSelect" aria-label="Division"></select>
       </label>
       <label>
-        Team
-        <select id="teamSelect"></select>
+        <span class="sr-only">Team</span>
+        <select id="teamSelect" aria-label="Team"></select>
       </label>
       <label>
-        Last Name
-        <input id="searchInput" type="search" placeholder="Last Name" autocomplete="off" />
+        <span class="sr-only">Last Name</span>
+        <input id="searchInput" type="search" placeholder="Last Name" aria-label="Last Name" autocomplete="off" />
       </label>
       <button id="lookupBtn" class="button" type="button">Lookup roster</button>
       <label class="url-field">
-        Custom tournament/team URL
-        <input id="tournamentUrlInput" type="url" placeholder="Paste any DigitalShift stats URL" autocomplete="off" />
+        <span class="sr-only">Custom tournament/team URL</span>
+        <input id="tournamentUrlInput" type="url" placeholder="Paste any DigitalShift stats URL" aria-label="Custom tournament/team URL" autocomplete="off" />
       </label>
       <button id="applyUrlBtn" class="button button-white" type="button">Use URL</button>
       <button id="refreshBtn" class="button button-white utility-button" type="button">Refresh</button>
@@ -73,6 +73,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260802d" type="module"></script>
+  <script src="./app.js?v=20260802e" type="module"></script>
 </body>
 </html>

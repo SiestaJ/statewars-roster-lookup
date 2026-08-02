@@ -130,7 +130,7 @@ function findMatchingEvent(tournament) {
 }
 
 function tournamentShortLabel(tournament) {
-  return tournament?.short_name || tournament?.name || `Tournament ${tournament?.id || ''}`.trim();
+  return tournament?.shortName || tournament?.name || tournament?.short_name || `Tournament ${tournament?.id || ''}`.trim();
 }
 
 function tournamentDetailLabel(tournament) {
