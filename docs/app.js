@@ -831,7 +831,7 @@ function getPdfMatch(player) {
 }
 
 function divisionUrl(divisionId = els.division.value) {
-  return `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/division/${divisionId}?tournament_id=${CONFIG.tournamentId}`;
+  return `${CONFIG.statsOrigin}/stats#/${CONFIG.leagueId}/standings?render=division&division_id=${encodeURIComponent(divisionId)}`;
 }
 
 function teamUrl(teamId) {
