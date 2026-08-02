@@ -452,7 +452,6 @@ async function loadTournament(options = {}) {
     const source = event ? ` Matched event: ${event.name} (${eventDateLabel(event)}).` : '';
     setStatus(`Loaded ${state.teamsByDivision.length} divisions for ${state.currentTournamentName}.${source} Choose a division, then load players. You can still search the RHA PDF by last name.`);
     closeUtilityMenu();
-    startTournamentOpsScan();
   } catch (err) {
     console.error(err);
     setStatus(err.message, true);
