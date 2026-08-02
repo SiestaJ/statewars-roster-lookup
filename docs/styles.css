@@ -16,6 +16,12 @@
 
 * { box-sizing: border-box; }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -26,7 +32,7 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.shell { max-width: 1180px; margin: 0 auto; padding: 14px 18px 48px; }
+.shell { width: 100%; max-width: 1180px; margin: 0 auto; padding: 14px 18px 48px; overflow-x: hidden; }
 
 .hero {
   margin: -14px -18px 12px;
@@ -75,14 +81,16 @@ h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); line-height: .96; letter-spac
 
 .controls {
   display: grid;
-  grid-template-columns: minmax(100px, .55fr) minmax(180px, 1.2fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, .8fr) auto auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
   align-items: end;
 }
 
-.url-field { grid-column: 1 / -4; }
+.url-field { grid-column: 1 / span 3; }
 label { display: grid; gap: 7px; color: var(--muted); font-weight: 800; font-size: 13px; }
 select, input, button, .button {
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
   border-radius: 14px;
   border: 1px solid var(--line);
@@ -165,8 +173,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 9px 0; }
   .shell { padding: 8px 14px 40px; }
   .hero { margin: -8px -14px 10px; padding: 10px 14px; }
   .brand-card { grid-template-columns: 46px 1fr; gap: 10px; padding: 9px 12px; border-radius: 16px; }
+  .brand-copy { min-width: 0; }
   .statewars-logo { width: 44px; height: 44px; border-radius: 12px; }
-  h1 { font-size: 30px; }
+  h1 { font-size: clamp(24px, 8vw, 30px); }
   .pdf-meta { font-size: 11px; margin-top: 4px; }
   .card { padding: 14px; border-radius: 16px; }
   .controls { grid-template-columns: 1fr; }
